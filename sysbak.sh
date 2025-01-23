@@ -229,7 +229,7 @@ if (( ${PV} == 2 * ${LP} )); then
     fi
 
     # Delay remirroring to ensure backup is fully completed
-    echo "Pausing for 60 seconds before remirroring..."
+    echo "Pausing for 30 Minutes before remirroring..."
     sleep 1800  # Adjust the sleep duration as needed
 
     # Remirror the disk
