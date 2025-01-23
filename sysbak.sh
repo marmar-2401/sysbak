@@ -222,8 +222,10 @@ elif [ "${ROOTVG_COUNT}" -gt 1 ]; then
         # Delay remirroring to ensure backup is fully completed
         echo "Pausing for 60 seconds before remirroring..."
         sleep sleep 1800  # Adjust the sleep duration as needed 
-        
+
+        #Remirror the disk 
         mirrorvg -S rootvg ${BACKUP_DISK}
+        savebase
     else
         ROOTVG_STATUS="spanned"
         echo "The Volume Group Is Not Mirrored. Rootvg is extended over two disks."
