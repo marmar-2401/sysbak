@@ -210,9 +210,10 @@ elif [ "${ROOTVG_COUNT}" -gt 1 ]; then
     
     if (( ${PV} == 2 * ${LP} )); then
         ROOTVG_STATUS="mirrored"
+        unmirrorvg rootvg ${BACKUP_DISK}
         echo "The Volume Group Is Mirrored."
         echo "Starting System Backup To /dev/${DEVICE}..."
-         if !  mksysb -eiXpN /dev/${DEVICE}; then
+         if !  mksysb -eiXpN /dev/${DEVICE} /dev/${BACKUP_DISK}; then
             echo "Backup Failed."
             echo "Serial:${CURRENT_SERIAL} Exit Code:10 Date:${CURRENT_DATE} Time:${TIME} ROOTVG Status:${ROOTVG_STATUS}" >> "${SYSBAK_LOG}"
             echo "Backup has failed on ${HOSTNAME}." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
