@@ -219,6 +219,10 @@ elif [ "${ROOTVG_COUNT}" -gt 1 ]; then
             echo "Backup has failed on ${HOSTNAME}." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
             exit 10
          fi
+        # Delay remirroring to ensure backup is fully completed
+        echo "Pausing for 60 seconds before remirroring..."
+        sleep sleep 1800  # Adjust the sleep duration as needed 
+        
         mirrorvg -S rootvg ${BACKUP_DISK}
     else
         ROOTVG_STATUS="spanned"
