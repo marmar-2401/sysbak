@@ -204,28 +204,51 @@ if [ "${ROOTVG_COUNT}" -eq 0 ]; then
 elif [ "${ROOTVG_COUNT}" -gt 1 ]; then
     echo "Multiple ROOTVGs Detected."
     
-    LP=$(lsvg -l rootvg | awk 'NR > 2 { print $3; exit 0; }')
-    PV=$(lsvg -l rootvg | awk 'NR > 2 { print $4; exit 0; }')
-    BACKUP_DISK=$(lspv | grep -i rootvg | awk 'NR==1 {print $1}')
-    
-    if (( ${PV} == 2 * ${LP} )); then
-        ROOTVG_STATUS="mirrored"
-        unmirrorvg rootvg ${BACKUP_DISK}
-        echo "The Volume Group Is Mirrored."
-        echo "Starting System Backup To /dev/${DEVICE}..."
-         if !  mksysb -eiXpN /dev/${DEVICE} /dev/${BACKUP_DISK}; then
-            echo "Backup Failed."
-            echo "Serial:${CURRENT_SERIAL} Exit Code:10 Date:${CURRENT_DATE} Time:${TIME} ROOTVG Status:${ROOTVG_STATUS}" >> "${SYSBAK_LOG}"
-            echo "Backup has failed on ${HOSTNAME}." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
-            exit 10
-         fi
-        # Delay remirroring to ensure backup is fully completed
-        echo "Pausing for 60 seconds before remirroring..."
-        sleep sleep 1800  # Adjust the sleep duration as needed 
+    # Extract the logical and physical partition details
+LP=$(lsvg -l rootvg | awk 'NR > 2 { print $3; exit 0; }')
+PV=$(lsvg -l rootvg | awk 'NR > 2 { print $4; exit 0; }')
 
-        #Remirror the disk 
-        mirrorvg -S rootvg ${BACKUP_DISK}
-        savebase
+# Find the backup disk (assuming it's the first disk not in use by rootvg)
+BACKUP_DISK=$(lspv | grep -i rootvg | awk 'NR==1 {print $1}')
+
+# Check if the physical volume is mirrored
+if (( ${PV} == 2 * ${LP} )); then
+    ROOTVG_STATUS="mirrored"
+    
+    # Unmirror the volume group
+    unmirrorvg rootvg ${BACKUP_DISK}
+    echo "The Volume Group Is Mirrored."
+    echo "Starting System Backup To /dev/${DEVICE}..."
+    
+    # Perform the backup using mksysb
+    if ! mksysb -eiXpN /dev/${DEVICE} /dev/${BACKUP_DISK}; then
+        echo "Backup Failed."
+        echo "Serial:${CURRENT_SERIAL} Exit Code:10 Date:${CURRENT_DATE} Time:${TIME} ROOTVG Status:${ROOTVG_STATUS}" >> "${SYSBAK_LOG}"
+        echo "Backup has failed on ${HOSTNAME}." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
+        exit 10
+    fi
+
+    # Delay remirroring to ensure backup is fully completed
+    echo "Pausing for 60 seconds before remirroring..."
+    sleep 1800  # Adjust the sleep duration as needed
+
+    # Remirror the disk
+    mirrorvg -S rootvg ${BACKUP_DISK}
+
+    # Dynamically find the hdisk names for the rootvg
+    ROOTVG_HD_DISK=$(lsvg -p rootvg | awk '{print $1}' | grep -E '^hdisk[0-9]+$')
+
+    # Perform bosboot for the rootvg disks
+    for hdisk in ${ROOTVG_HD_DISK}; do
+        bosboot -ad /dev/${hdisk}
+    done
+
+    # Update the boot list
+    bootlist -m normal ${ROOTVG_HD_DISK}
+    bootlist -m service cd0 rmt0 ${ROOTVG_HD_DISK}
+
+    # Save the base system configuration
+    savebase -v
     else
         ROOTVG_STATUS="spanned"
         echo "The Volume Group Is Not Mirrored. Rootvg is extended over two disks."
@@ -257,6 +280,7 @@ if [ "${BACKUP_DATE}" != "${CURRENT_DATE}" ]; then
     echo "Backup Verification Failed."
     echo "Serial:${CURRENT_SERIAL} Exit Code:12 Date:${CURRENT_DATE} Time:${TIME} ROOTVG Status:${ROOTVG_STATUS}" >> "${SYSBAK_LOG}"
     echo "Backup Verification Has Failed on ${HOSTNAME}." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
+
     exit 12
 fi
 
