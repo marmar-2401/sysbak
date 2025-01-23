@@ -219,7 +219,7 @@ elif [ "${ROOTVG_COUNT}" -gt 1 ]; then
             echo "Backup has failed on ${HOSTNAME}." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
             exit 10
          fi
-        
+        mirrorvg -S rootvg ${BACKUP_DISK}
     else
         ROOTVG_STATUS="spanned"
         echo "The Volume Group Is Not Mirrored. Rootvg is extended over two disks."
