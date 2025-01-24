@@ -235,7 +235,7 @@ if (( ${PV} == 2 * ${LP} )); then
 
    # Delay remirroring to ensure backup is fully completed
     echo "Pausing for 2 Minutes before remirroring..."
-    sleep 600  # Adjust the sleep duration as needed
+    sleep 1200  # Adjust the sleep duration as needed
 
    # Dynamically find the hdisk names for the rootvg
     ROOTVG_HD_DISK=$(lsvg -p rootvg | awk '{print $1}' | grep -E '^hdisk[0-9]+$')
