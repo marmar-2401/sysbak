@@ -60,6 +60,11 @@ Exit Codes:
 10: Backup Has Failed On A Multiple ROOTVG System 
 11: Backup Has Failed On A Single ROOTVG System
 12: Backup Verification Has Failed
+13: Failed to create bosboot bootdisk after remirroring
+14: Failed bosboot for /dev/ipldevice
+15: Failed To Update Normal Bootlist
+16: Failed To Update Service
+17: Failed savebase after bosboot
 
 Files:
 backup_details: This file logs the stdin and stderr output from the `sysbak.sh` script. Use tail -f backup_details to watch the script's progress in real-time.
@@ -229,35 +234,56 @@ if (( ${PV} == 2 * ${LP} )); then
     fi
 
    # Delay remirroring to ensure backup is fully completed
-    echo "Pausing for 30 Minutes before remirroring..."
-    sleep 1800  # Adjust the sleep duration as needed
+    echo "Pausing for 2 Minutes before remirroring..."
+    sleep 120  # Adjust the sleep duration as needed
 
-    # Dynamically find the hdisk names for the rootvg
+   # Dynamically find the hdisk names for the rootvg
     ROOTVG_HD_DISK=$(lsvg -p rootvg | awk '{print $1}' | grep -E '^hdisk[0-9]+$')
 
-    # Remirror the disk
-    mirrorvg -S rootvg ${BACKUP_DISK}
-    
-    # Perform bosboot for the rootvg disks
+   # Perform bosboot for the rootvg disks
     for hdisk in ${ROOTVG_HD_DISK}; do
-        echo "Running bosboot for /dev/${hdisk}..."
+    echo "Running bosboot for /dev/${hdisk}..."
         if ! bosboot -ad /dev/${hdisk}; then
             echo "Error: bosboot failed for /dev/${hdisk}"
-            exit 1
+            echo "Serial:${CURRENT_SERIAL} Exit Code:13 Date:${CURRENT_DATE} Time:${TIME} ROOTVG Status:${ROOTVG_STATUS}" >> "${SYSBAK_LOG}"
+            echo "Failed to bosboot bootdisk for ${hdisk} on ${HOSTNAME}." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
+            exit 13
         fi
     done
 
-    # Perform bosboot for the ipldevice 
-    bosboot -ad /dev/ipldevice
-    
+    # Perform bosboot for /dev/ipldevice
+    echo "Running bosboot for /dev/ipldevice..."
+        if ! bosboot -ad /dev/ipldevice; then
+            echo "Error: bosboot failed for /dev/ipldevice"
+            echo "Serial:${CURRENT_SERIAL} Exit Code:14 Date:${CURRENT_DATE} Time:${TIME} ROOTVG Status:${ROOTVG_STATUS}" >> "${SYSBAK_LOG}"
+            echo "Failed bosboot for /dev/ipldevice on ${HOSTNAME}." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
+            exit 14
+        fi
+
     # Update the boot list
     echo "Updating boot list for rootvg disks..."
-    bootlist -m normal ${ROOTVG_HD_DISK}
-    bootlist -m service cd0 rmt0 ${ROOTVG_HD_DISK}
+        if ! bootlist -m normal ${ROOTVG_HD_DISK}; then
+            echo "Error: Failed to update the normal boot list."
+            echo "Serial:${CURRENT_SERIAL} Exit Code:15 Date:${CURRENT_DATE} Time:${TIME} ROOTVG Status:${ROOTVG_STATUS}" >> "${SYSBAK_LOG}"
+            echo "Failed To Update Normal Bootlist on ${HOSTNAME}." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
+            exit 15
+        fi
+
+        if ! bootlist -m service cd0 rmt0 ${ROOTVG_HD_DISK}; then
+            echo "Error: Failed to update the service boot list."
+            echo "Serial:${CURRENT_SERIAL} Exit Code:16 Date:${CURRENT_DATE} Time:${TIME} ROOTVG Status:${ROOTVG_STATUS}" >> "${SYSBAK_LOG}"
+            echo "Failed To Update Service Bootlist on ${HOSTNAME}." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
+            exit 16
+        fi
 
     # Save the base system configuration
     echo "Saving base system configuration..."
-    savebase -v
+        if ! savebase -v; then
+            echo "Error: Failed to save the base system configuration."
+            echo "Serial:${CURRENT_SERIAL} Exit Code:17 Date:${CURRENT_DATE} Time:${TIME} ROOTVG Status:${ROOTVG_STATUS}" >> "${SYSBAK_LOG}"
+            echo "Failed savebase after bosboot on ${HOSTNAME}." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
+            exit 17
+        fi    
 
     else
         ROOTVG_STATUS="spanned"
