@@ -232,12 +232,12 @@ if (( ${PV} == 2 * ${LP} )); then
     echo "Pausing for 30 Minutes before remirroring..."
     sleep 1800  # Adjust the sleep duration as needed
 
-    # Remirror the disk
-    mirrorvg -S rootvg ${BACKUP_DISK}
-
     # Dynamically find the hdisk names for the rootvg
     ROOTVG_HD_DISK=$(lsvg -p rootvg | awk '{print $1}' | grep -E '^hdisk[0-9]+$')
 
+    # Remirror the disk
+    mirrorvg -S rootvg ${BACKUP_DISK}
+    
     # Perform bosboot for the rootvg disks
     for hdisk in ${ROOTVG_HD_DISK}; do
         echo "Running bosboot for /dev/${hdisk}..."
