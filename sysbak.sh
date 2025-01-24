@@ -232,11 +232,8 @@ if (( ${PV} == 2 * ${LP} )); then
         echo "Backup has failed on ${HOSTNAME}." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
         exit 10
     fi
-
-   # Delay remirroring to ensure backup is fully completed
-    echo "Pausing for 2 Minutes before remirroring..."
-    sleep 1200  # Adjust the sleep duration as needed
-
+   # Sleep to wait for backup to complete
+   sleep 9000
    # Dynamically find the hdisk names for the rootvg
     ROOTVG_HD_DISK=$(lsvg -p rootvg | awk '{print $1}' | grep -E '^hdisk[0-9]+$')
 
@@ -277,6 +274,7 @@ if (( ${PV} == 2 * ${LP} )); then
         fi
 
     # Save the base system configuration
+ 
     echo "Saving base system configuration..."
         if ! savebase -v; then
             echo "Error: Failed to save the base system configuration."
