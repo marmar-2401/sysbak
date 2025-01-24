@@ -228,7 +228,7 @@ if (( ${PV} == 2 * ${LP} )); then
         exit 10
     fi
 
-    # Delay remirroring to ensure backup is fully completed
+   # Delay remirroring to ensure backup is fully completed
     echo "Pausing for 30 Minutes before remirroring..."
     sleep 1800  # Adjust the sleep duration as needed
 
@@ -240,15 +240,25 @@ if (( ${PV} == 2 * ${LP} )); then
 
     # Perform bosboot for the rootvg disks
     for hdisk in ${ROOTVG_HD_DISK}; do
-        bosboot -ad /dev/${hdisk}
+        echo "Running bosboot for /dev/${hdisk}..."
+        if ! bosboot -ad /dev/${hdisk}; then
+            echo "Error: bosboot failed for /dev/${hdisk}"
+            exit 1
+        fi
     done
 
+    # Perform bosboot for the ipldevice 
+    bosboot -ad /dev/ipldevice
+    
     # Update the boot list
+    echo "Updating boot list for rootvg disks..."
     bootlist -m normal ${ROOTVG_HD_DISK}
     bootlist -m service cd0 rmt0 ${ROOTVG_HD_DISK}
 
     # Save the base system configuration
+    echo "Saving base system configuration..."
     savebase -v
+
     else
         ROOTVG_STATUS="spanned"
         echo "The Volume Group Is Not Mirrored. Rootvg is extended over two disks."
