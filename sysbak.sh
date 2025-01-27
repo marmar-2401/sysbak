@@ -183,7 +183,7 @@ elif [ "${ROOTVG_COUNT}" -gt 1 ]; then
   
    # Create The Custom image.data File Using mkszfile
 echo "Creating image.data Using mkszfile..."
-mkszfile 
+mkszfile -d /tmp/custom_image_data 
 
 # Check If mkszfile Was Successful
 if [ $? -ne 0 ]; then
@@ -233,20 +233,20 @@ echo "Contents of ${IMAGE_DATA_FILE} after modification:"
 cat "${IMAGE_DATA_FILE}"
 
 # Perform The Backup Using mksysb
-sleep 60 &
-if ! mksysb -eXpN /dev/${DEVICE} /dev/${BACKUP_DISK}; then
+if ! mksysb -eXpN -i /tmp/custom_image_data  /dev/${DEVICE} /dev/${BACKUP_DISK}; then
     echo "Backup Failed."
     echo "Serial:${CURRENT_SERIAL} Exit Code:10 Date:${CURRENT_DATE} Time:${TIME} ROOTVG Status:${ROOTVG_STATUS}" >> "${SYSBAK_LOG}"
     echo "Backup Has Failed On ${HOSTNAME}." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
     exit 10
 fi
 
+
 fi     
 else
     ROOTVG_STATUS="Single Disk"
     echo "Starting System Backup To /dev/${DEVICE}..."
     
-    if ! mksysb -eiXpN /dev/${DEVICE}; then
+    if ! mksysb -eXpN /dev/${DEVICE}; then
         echo "Backup Failed."
         echo "Serial:${CURRENT_SERIAL} Exit Code:11 Date:${CURRENT_DATE} Time:${TIME} ROOTVG Status:${ROOTVG_STATUS}" >> "${SYSBAK_LOG}"
         echo "Backup Has Failed On ${HOSTNAME}." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
