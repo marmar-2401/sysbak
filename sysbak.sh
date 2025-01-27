@@ -232,7 +232,7 @@ elif [ "${ROOTVG_COUNT}" -gt 1 ]; then
 
     # Update the LV_SOURCE_DISK_LIST With The New Source Disk
     echo "Updating LV_SOURCE_DISK_LIST To ${SOURCE_DISK}..."
-    sed "s/LV_SOURCE_DISK_LIST=.*/LV_SOURCE_DISK_LIST=${SOURCE_DISK/}" "${IMAGE_DATA_FILE}" > "${IMAGE_DATA_FILE.tmp}"
+    sed "s/LV_SOURCE_DISK_LIST=.*/LV_SOURCE_DISK_LIST=${SOURCE_DISK}/" "${IMAGE_DATA_FILE}" > "${IMAGE_DATA_FILE.tmp}"
     mv "${IMAGE_DATA_FILE.tmp}" "${IMAGE_DATA_FILE}"
 
     # Confirm The Changes To image.data 
