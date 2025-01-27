@@ -208,6 +208,7 @@ elif [ "${ROOTVG_COUNT}" -gt 1 ]; then
     fi
 
     # Divide PPs By 2 For Any data_vg With COPIES= 2
+    sleep 60 &
     echo "Dividing PPs by 2 for data_vg with COPIES=2..."
     awk '
     /COPIES= 2/ { 
