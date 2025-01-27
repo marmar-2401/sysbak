@@ -181,76 +181,67 @@ elif [ "${ROOTVG_COUNT}" -gt 1 ]; then
     echo "The Volume Group Is Mirrored."
     echo "Starting System Backup To /dev/${DEVICE}..."
   
-    # Create The Custom image.data File Using mkszfile
-    echo "Creating image.data Using mkszfile..."
-    mkszfile 
+   # Create The Custom image.data File Using mkszfile
+echo "Creating image.data Using mkszfile..."
+mkszfile 
 
-    # Check If mkszfile Was Successful
-    if [ $? -ne 0 ]; then
-        echo "Failed to create /image.data."
-        echo "Serial:${CURRENT_SERIAL} Exit Code:12 Date:${CURRENT_DATE} Time:${TIME}" >> "${SYSBAK_LOG}"
-        echo "Failed To Create Custom /image.data File on ${HOSTNAME}. Backup Will Not Occur." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}  
-        exit 12 
-    fi
-
-    # Get The Source Disk For The mksysb Backup To Store In The image.data File 
-    SOURCE_DISK=$(lspv | grep -i rootvg | awk '{ print $1 }' | head -n 1)
-
-    # Specifies The Path To The image.data File
-    IMAGE_DATA_FILE="/image.data"
-
-    # Checks If The image.data File Exists
-    if [ ! -f "${IMAGE_DATA_FILE}" ]; then
-        echo "${IMAGE_DATA_FILE} Not Found."
-        echo "Serial:${CURRENT_SERIAL} Exit Code:13 Date:${CURRENT_DATE} Time:${TIME}" >> "${SYSBAK_LOG}"
-        echo "/image.data File Does Not Exist On ${HOSTNAME}. Backup Will Not Occur." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}  
-        exit 13
-    fi
-
-    # Divide PPs By 2 For Any data_vg With COPIES= 2
-   
-    echo "Dividing PPs by 2 for data_vg with COPIES=2..."
-    awk '
-    /COPIES= 2/ { 
-        copies_two = 1 
-    } 
-    /COPIES=/ && $0 !~ /COPIES= 2/ { 
-        copies_two = 0 
-    } 
-    /^[ \t]*PP=/ && copies_two { 
-        # Match PP= lines, even with leading spaces
-        split($0, arr, "=") 
-        new_value = int(arr[2] / 2)  # Divide the value of PP by 2
-        $0 = arr[1] "=" new_value   # Reconstruct the PP line with the new value
-    } 
-    { 
-        print 
-    }' "${IMAGE_DATA_FILE}" > "/temp.data" && mv "/temp.data" "${IMAGE_DATA_FILE}"
-
-    # Change COPIES=2 to COPIES=1
-    echo "Updating COPIES=2 to COPIES=1..."
-    sed 's/COPIES=[[:space:]]*2/COPIES=1/' "${IMAGE_DATA_FILE}" > "/temp.data" && mv "/temp.data" "${IMAGE_DATA_FILE}"
-
-    # Update the LV_SOURCE_DISK_LIST With The New Source Disk
-    echo "Updating LV_SOURCE_DISK_LIST To ${SOURCE_DISK}..."
-    sed "s/LV_SOURCE_DISK_LIST=.*/LV_SOURCE_DISK_LIST=${SOURCE_DISK}/" "${IMAGE_DATA_FILE}" > "${IMAGE_DATA_FILE}.tmp"
-    mv "${IMAGE_DATA_FILE}.tmp" "${IMAGE_DATA_FILE}"
-    
-    # Confirm The Changes To image.data 
-    echo "image.data Has Been Created And Updated Successfully."
-
-    # Perform The Backup Using mksysb
-    if ! mksysb -eXpN /dev/${DEVICE} /dev/${BACKUP_DISK}; then
-        echo "Backup Failed."
-        echo "Serial:${CURRENT_SERIAL} Exit Code:10 Date:${CURRENT_DATE} Time:${TIME} ROOTVG Status:${ROOTVG_STATUS}" >> "${SYSBAK_LOG}"
-        echo "Backup Has Failed On ${HOSTNAME}." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
-        exit 10
-    fi
-
-    rm -rf /image.data 
-
+# Check If mkszfile Was Successful
+if [ $? -ne 0 ]; then
+    echo "Failed to create /image.data."
+    echo "Serial:${CURRENT_SERIAL} Exit Code:12 Date:${CURRENT_DATE} Time:${TIME}" >> "${SYSBAK_LOG}"
+    echo "Failed To Create Custom /image.data File on ${HOSTNAME}. Backup Will Not Occur." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}  
+    exit 12 
 fi
-    
+
+# Get The Source Disk For The mksysb Backup To Store In The image.data File 
+SOURCE_DISK=$(lspv | grep -i rootvg | awk '{ print $1 }' | head -n 1)
+
+# Specifies The Path To The image.data File
+IMAGE_DATA_FILE="/image.data"
+
+# Checks If The image.data File Exists
+if [ ! -f "${IMAGE_DATA_FILE}" ]; then
+    echo "${IMAGE_DATA_FILE} Not Found."
+    echo "Serial:${CURRENT_SERIAL} Exit Code:13 Date:${CURRENT_DATE} Time:${TIME}" >> "${SYSBAK_LOG}"
+    echo "/image.data File Does Not Exist On ${HOSTNAME}. Backup Will Not Occur." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}  
+    exit 13
+fi
+
+# Ensure COPIES=2 is replaced with COPIES=1
+echo "Updating COPIES=2 to COPIES=1 in image.data..."
+sed 's/COPIES=[[:space:]]*2/COPIES=1/' "${IMAGE_DATA_FILE}" > "/tmp/image.data.tmp" && mv "/tmp/image.data.tmp" "${IMAGE_DATA_FILE}"
+
+# Check if the modification worked
+if grep -i "COPIES=1" "${IMAGE_DATA_FILE}" > /dev/null; then
+    echo "COPIES=1 is successfully set in ${IMAGE_DATA_FILE}."
+else
+    echo "Failed to set COPIES=1 in ${IMAGE_DATA_FILE}. Exiting."
+    echo "Serial:${CURRENT_SERIAL} Exit Code:12 Date:${CURRENT_DATE} Time:${TIME}" >> "${SYSBAK_LOG}"
+    echo "Failed to set COPIES=1 on ${HOSTNAME}. Backup Will Not Occur." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
+    exit 12
+fi
+
+# Update the LV_SOURCE_DISK_LIST With The New Source Disk
+echo "Updating LV_SOURCE_DISK_LIST To ${SOURCE_DISK}..."
+sed "s/LV_SOURCE_DISK_LIST=.*/LV_SOURCE_DISK_LIST=${SOURCE_DISK}/" "${IMAGE_DATA_FILE}" > "/tmp/image.data.tmp" && mv "/tmp/image.data.tmp" "${IMAGE_DATA_FILE}"
+
+# Confirm The Changes To image.data 
+echo "image.data Has Been Updated Successfully."
+
+# Optional: Show the content of image.data for debugging
+echo "Contents of ${IMAGE_DATA_FILE} after modification:"
+cat "${IMAGE_DATA_FILE}"
+
+# Perform The Backup Using mksysb
+sleep 60 &
+if ! mksysb -eXpN /dev/${DEVICE} /dev/${BACKUP_DISK}; then
+    echo "Backup Failed."
+    echo "Serial:${CURRENT_SERIAL} Exit Code:10 Date:${CURRENT_DATE} Time:${TIME} ROOTVG Status:${ROOTVG_STATUS}" >> "${SYSBAK_LOG}"
+    echo "Backup Has Failed On ${HOSTNAME}." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
+    exit 10
+fi
+
+fi     
 else
     ROOTVG_STATUS="Single Disk"
     echo "Starting System Backup To /dev/${DEVICE}..."
