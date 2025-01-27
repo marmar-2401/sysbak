@@ -65,15 +65,6 @@ Exit Codes:
 16: Failed To Update Service
 17: Failed savebase after bosboot
 
-Files:
-backup_details: This file logs the stdin and stderr output from the `sysbak.sh` script. Use tail -f backup_details to watch the script's progress in real-time.
-
-usb_serial: A file that stores the serial number of the last successfully backed-up USB.
-
-usb_details: A temporary file created only if multiple USB devices are present when a mksysb is attempted. It stores device names and location codes for email reporting to the client and SCC.
-
-sysbak_log: A log file where the mksysb log is recorded, with an entry each time the script is run. Format: Serial:# Exit Code: # Date: Jan 1 2025 Time: HH:MM:SS. The file is appended each time the script runs.
-
 
 Last Revision: 01/21/2025
 Version: 1.0
