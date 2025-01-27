@@ -244,7 +244,7 @@ elif [ "${ROOTVG_COUNT}" -gt 1 ]; then
         echo "Serial:${CURRENT_SERIAL} Exit Code:10 Date:${CURRENT_DATE} Time:${TIME} ROOTVG Status:${ROOTVG_STATUS}" >> "${SYSBAK_LOG}"
         echo "Backup Has Failed On ${HOSTNAME}." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
         exit 10
-    fi
+    
 
     rm -rf /image.data 
     echo "Resetting image.data File For Next Update 
