@@ -246,7 +246,8 @@ elif [ "${ROOTVG_COUNT}" -gt 1 ]; then
         echo "Backup Has Failed On ${HOSTNAME}." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
         exit 10
     fi
-    
+
+    rm -rf /image.data 
 
 fi
     
