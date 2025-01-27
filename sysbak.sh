@@ -229,7 +229,7 @@ elif [ "${ROOTVG_COUNT}" -gt 1 ]; then
 
     # Change COPIES=2 to COPIES=1
     echo "Updating COPIES=2 to COPIES=1..."
-    sed -E 's/(COPIES=[[:space:]]*)2/\11/' "${IMAGE_DATA_FILE}" > "/temp.data" && mv "/temp.data" "${IMAGE_DATA_FILE}"
+    sed 's/COPIES=[[:space:]]*2/COPIES=1/' "${IMAGE_DATA_FILE}" > "/temp.data" && mv "/temp.data" "${IMAGE_DATA_FILE}"
 
     # Update the LV_SOURCE_DISK_LIST With The New Source Disk
     echo "Updating LV_SOURCE_DISK_LIST To ${SOURCE_DISK}..."
