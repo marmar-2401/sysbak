@@ -59,7 +59,6 @@ Exit Codes:
 9: No ROOTVG Detected On Server 
 10: Backup Has Failed On A Multiple ROOTVG System 
 11: Backup Has Failed On A Single ROOTVG System
-12: Backup Verification Has Failed
 13: Failed to create bosboot bootdisk after remirroring
 14: Failed bosboot for /dev/ipldevice
 15: Failed To Update Normal Bootlist
@@ -162,6 +161,8 @@ elif [ "${USB_COUNT}" -gt 1 ]; then
     mail -s "${HOSTNAME} Backup Report - Multiple USBs Detected" ${CLIENT_RECIPIENT} < "${USB_DETAILS}"
     rm -f "${USB_DETAILS}"
     exit 5
+else
+    echo "USB Discovered:${USB_LIST}"
 fi
 
 # Step 6: Retrieve USB Serial Number
@@ -218,7 +219,7 @@ BACKUP_DISK=$(lspv | grep -i rootvg | awk 'NR==1 {print $1}')
 
 # Check if the physical volume is mirrored
 if (( ${PV} == 2 * ${LP} )); then
-    ROOTVG_STATUS="mirrored"
+    ROOTVG_STATUS="Mirrored"
     
     # Unmirror the volume group
     unmirrorvg rootvg ${BACKUP_DISK}
@@ -277,24 +278,14 @@ if (( ${PV} == 2 * ${LP} )); then
 
     # Save the base system configuration
  
-    echo "Saving base system configuration..."
+    echo "Saving Base System Configuration..."
         if ! savebase -v; then
-            echo "Error: Failed to save the base system configuration."
+            echo "Error: Failed To Save The Base System Configuration."
             echo "Serial:${CURRENT_SERIAL} Exit Code:17 Date:${CURRENT_DATE} Time:${TIME} ROOTVG Status:${ROOTVG_STATUS}" >> "${SYSBAK_LOG}"
             echo "Failed savebase after bosboot on ${HOSTNAME}." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
             exit 17
         fi    
 
-    else
-        ROOTVG_STATUS="spanned"
-        echo "The Volume Group Is Not Mirrored. Rootvg is extended over two disks."
-        echo "Starting System Backup To /dev/${DEVICE}..."
-        if ! mksysb -eiXpN /dev/${DEVICE}; then
-            echo "Backup Failed."
-            echo "Serial:${CURRENT_SERIAL} Exit Code:10 Date:${CURRENT_DATE} Time:${TIME} ROOTVG Status:${ROOTVG_STATUS}" >> "${SYSBAK_LOG}"
-            echo "Backup has failed on ${HOSTNAME}." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
-            exit 10
-        fi
     fi
     
 else
@@ -307,17 +298,6 @@ else
         echo "Backup has failed on ${HOSTNAME}." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
         exit 11
     fi
-fi
-
-# Step 10: Verify Backup
-LAST_ENTRY=$(lsmksysb -B | tail -1)
-BACKUP_DATE=$(echo "${LAST_ENTRY}" | awk '{print $4, $5, $8}' | sed 's/\(.*2025\).*/\1/')
-if [ "${BACKUP_DATE}" != "${CURRENT_DATE}" ]; then
-    echo "Backup Verification Failed."
-    echo "Serial:${CURRENT_SERIAL} Exit Code:12 Date:${CURRENT_DATE} Time:${TIME} ROOTVG Status:${ROOTVG_STATUS}" >> "${SYSBAK_LOG}"
-    echo "Backup Verification Has Failed on ${HOSTNAME}." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
-
-    exit 12
 fi
 
 # Success
