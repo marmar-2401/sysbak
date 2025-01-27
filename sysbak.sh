@@ -249,6 +249,8 @@ elif [ "${ROOTVG_COUNT}" -gt 1 ]; then
 
     rm -rf /image.data 
     echo "Resetting image.data File For Next Update" 
+
+    fi
     
 else
     ROOTVG_STATUS="Single Disk"
