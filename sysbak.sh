@@ -183,7 +183,7 @@ elif [ "${ROOTVG_COUNT}" -gt 1 ]; then
   
     # Create The Custom image.data File Using mkszfile
     echo "Creating image.data Using mkszfile..."
-    mkszfile -d /image.data
+    mkszfile 
 
     # Check If mkszfile Was Successful
     if [ $? -ne 0 ]; then
