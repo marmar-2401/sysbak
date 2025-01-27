@@ -13,39 +13,19 @@ USB_LIST=$(lsdev | grep -i usbms | awk '{print $1}')
 USB_COUNT=$(echo "${USB_LIST}" | wc -l)
 LAST_SERIAL=$( [ -f "${SERIAL_FILE}" ] && cat "${SERIAL_FILE}" || echo "" )
 
-# Function: Show Help Information
+# Function To Show Help Information
 show_help() {
     cat << EOF
 ###########################################
 ### Help Section (shown with --help) ######
 ###########################################
 Description:
-This script performs a system backup to a USB drive on an AIX host.
-
-Requirements:
--Sendmail must be installed
--3 USBs larger than 10 GB each
-
-Setup:
--Make a sysbak directory for the sysbak.sh script to go into so when it produces its associated files they are together.
--Configure the "CLIENT_RECIPIENT" variable in the top of the script for backup alerting.
--Create a cron job using crontab -e as a root user. 
-EX:
-* * * * * ksh /path/to/sysbak.sh &
-
--Put the sysbakrotate.sh into the sysbak directory and set its cronjob.
-EX:
-* * * * * ksh /path/to/sysbakrotate.sh &
-
+This Script Performs A System Backup To A USB Device On A AIX host.
 
 Usage:
   chmod +x sysbak.sh
   ./sysbak.sh
   ./sysbak.sh --help
-
-Override Backing Up To The Same USB:
-- '> usb_serial' - Overwrite the stored serial number to be nothing
-- 'ksh sysbak.sh' - Runs the sysbak.sh script in the background 
 
 Exit Codes:
 1: Sendmail Is Not Installed 
@@ -59,12 +39,8 @@ Exit Codes:
 9: No ROOTVG Detected On Server 
 10: Backup Has Failed On A Multiple ROOTVG System 
 11: Backup Has Failed On A Single ROOTVG System
-13: Failed to create bosboot bootdisk after remirroring
-14: Failed bosboot for /dev/ipldevice
-15: Failed To Update Normal Bootlist
-16: Failed To Update Service
-17: Failed savebase after bosboot
-
+12: Failed To Create Custom /image.data
+13: Custom /image.data File Could Not Be Found 
 
 Last Revision: 01/21/2025
 Version: 1.0
@@ -73,76 +49,75 @@ Email: markp@softcomputer.com
 EOF
 }
 
-# Check if help is requested
+# Check If Help Is Requested
 if [ "$1" == "--help" ]; then
     show_help
     exit 0
 fi
 
-# Redirect all output to the log file
+# Redirect All Output To The backup_details File 
 exec >"${DETAILS_FILE}" 2>&1
 
-# Creates the sysbak_log file in /var/log
+# Creates The sysbak_log File In /var/log
 if [ ! -d "${SYSBAK_LOG}" ]; then
     touch "${SYSBAK_LOG}"
 fi
 
-
-# Step 1: Check if Sendmail is Installed
+# Check If Sendmail Is Installed
 if ! command -v sendmail >/dev/null 2>&1; then
-    echo "Sendmail is not installed. Exiting."
-    echo "Sendmail is not installed on ${HOSTNAME}. Backup will not occur." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
+    echo "Sendmail Is Not Installed. Exiting."
+    echo "Sendmail Is Not Installed On ${HOSTNAME}. Backup Will Not Occur." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
     echo "Serial:None Exit Code:1 Date:${CURRENT_DATE} Time:${TIME}" >> "${SYSBAK_LOG}"
     exit 1
 fi
 
-# Step 2: Handle Previous USB Serial Number
+# Handles Previous USB Serial Number
 if [ -z "${LAST_SERIAL}" ]; then
-    echo "No previous USB serial number found. Creating ${SERIAL_FILE}."
+    echo "No Previous USB Serial Number Found. Creating ${SERIAL_FILE}."
     touch "${SERIAL_FILE}"
 else
     echo "Last USB Serial: ${LAST_SERIAL}"
 fi
 
-# Step 3: Remove Existing USB Devices
+# Removes Existing USB Devices
 if [ -n "${USB_LIST}" ]; then
-    echo "Removing all detected USB devices..."
+    echo "Removing All Detected USB Devices..."
     for DEVICE in ${USB_LIST}; do
-        echo "Removing device: ${DEVICE}"
+        echo "Removing Device: ${DEVICE}"
         if rmdev -dl "${DEVICE}" 2>/dev/null; then
-            echo "Successfully removed ${DEVICE}."
+            echo "Successfully Removed ${DEVICE}."
         else
-            echo "Failed to remove ${DEVICE}."
+            echo "Failed To Remove ${DEVICE}."
             echo "Serial:None Exit Code:2 Date:${CURRENT_DATE} Time:${TIME}" >> "${SYSBAK_LOG}"
-            echo "USB Device Removal On ${HOSTNAME} failed. Backup will not occur." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
+            echo "USB Device Removal On ${HOSTNAME} failed. Backup Will Not Occur." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
             exit 2
         fi
     done
 else
-    echo "No USB devices found to remove."
+    echo "No USB Devices Found To Remove."
 fi
 
-# Step 4: Rediscover USB Devices
-echo "Discovering USB devices..."
+# Rediscover USB Devices
+echo "Discovering USB Devices..."
 cfgmgr -l usb0
 if [ $? -ne 0 ]; then
-    echo "Device discovery encountered an error."
+    echo "Device Discovery Encountered An Error."
     echo "Serial:None Exit Code:3 Date:${CURRENT_DATE} Time:${TIME}" >> "${SYSBAK_LOG}"
-    echo "Device discovery error occurred on ${HOSTNAME}. Backup will not occur." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
+    echo "Device Discovery Error Occurred On ${HOSTNAME}. Backup Will Not Occur." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
     exit 3
 fi
 
-# Step 5: Check USB Devices
+# Check For Names Of USB Devices
 USB_LIST=$(lsdev | grep -i usbms | awk '{print $1}')
 USB_COUNT=$(echo "${USB_LIST}" | wc -l)
 
 if [ "${USB_COUNT}" -eq 0 ]; then
-    echo "No USB devices detected."
+    echo "No USB Devices Detected."
     echo "Serial:None Exit Code:4 Date:${CURRENT_DATE} Time:${TIME}" >> "${SYSBAK_LOG}"
-    echo "No USBs connected to ${HOSTNAME}. Backup will not occur." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
+    echo "No USBs Connected To ${HOSTNAME}. Backup Will Not Occur." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
     exit 4
 elif [ "${USB_COUNT}" -gt 1 ]; then
-    echo "Multiple USB devices detected."
+    echo "Multiple USB Devices Detected."
     lsconf | grep -i 'Serial Number' >> "${USB_DETAILS}"
     for DEVICE in ${USB_LIST}; do
         LOCATION_CODE=$(lscfg -vpl "${DEVICE}" | grep -i "usbms" | awk '{print $2}' | sed -n 's/.*-\([A-Z][0-9]*-[A-Z][0-9]*\)-.*/\1/p')
@@ -156,33 +131,27 @@ else
     echo "USB Discovered:${USB_LIST}"
 fi
 
-# Step 6: Retrieve USB Serial Number
+# Retrieval Of USB Serial Number
 DEVICE=$(echo "${USB_LIST}" | head -n 1)
-if [ -z "${DEVICE}" ]; then
-    echo "No valid USB device found after discovery."
-    echo "Serial:None Exit Code:4 Date:${CURRENT_DATE} Time:${TIME}" >> "${SYSBAK_LOG}"
-    echo "No valid USB device found on ${HOSTNAME}. Backup will not occur." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
-    exit 4
-fi
-
 CURRENT_SERIAL=$(lscfg -vpl "${DEVICE}" | grep -i "Serial Number" | awk -F. '{print $NF}')
+
 if [ -z "${CURRENT_SERIAL}" ]; then
-    echo "Failed to retrieve USB serial number."
+    echo "Failed To Retrieve USB Serial Number."
     echo "Serial:None Exit Code:6 Date:${CURRENT_DATE} Time:${TIME}" >> "${SYSBAK_LOG}"
-    echo "Unsupported USB Connected To ${HOSTNAME}. Backup will not occur." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
+    echo "Unsupported USB Connected To ${HOSTNAME}. Backup Will Not Occur." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
     exit 6
 fi
 
-# Step 7: Verify USB Device Size
+# Verification Of USB Device Size
 DEVICE_SIZE=$(bootinfo -s ${DEVICE})
 if [ -z "${DEVICE_SIZE}" ] || [ "${DEVICE_SIZE}" -lt 10240 ]; then
-    echo "USB device size ${DEVICE_SIZE:-0} MB is smaller than 10GB."
+    echo "USB Device Size ${DEVICE_SIZE:-0} MB Is Smaller Than 10GB."
     echo "Serial:${CURRENT_SERIAL} Exit Code:7 Date:${CURRENT_DATE} Time:${TIME}" >> "${SYSBAK_LOG}"
     echo "Connected USB Is Not Large Enough on ${HOSTNAME} For Backup. Backup will not occur." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
     exit 7
 fi
 
-# Step 8: Check Serial Number Change
+# Check If Serial Number Changed Ensures USB Was Changed 
 if [ "${CURRENT_SERIAL}" = "${LAST_SERIAL}" ]; then
     echo "USB Serial Number Conflict."
     echo "Serial:${CURRENT_SERIAL} Exit Code:8 Date:${CURRENT_DATE} Time:${TIME}" >> "${SYSBAK_LOG}"
@@ -190,7 +159,7 @@ if [ "${CURRENT_SERIAL}" = "${LAST_SERIAL}" ]; then
     exit 8
 fi
 
-# Step 9: Check If There Is a Solo Rootvg, Mirrored Rootvg, or Spanned Rootvg
+# Check If There Is a Single Disk Rootvg Or A Mirrored Rootvg 
 ROOTVG_COUNT=$(lspv | grep -iw 'rootvg' | wc -l)
 
 if [ "${ROOTVG_COUNT}" -eq 0 ]; then
@@ -201,83 +170,84 @@ if [ "${ROOTVG_COUNT}" -eq 0 ]; then
 elif [ "${ROOTVG_COUNT}" -gt 1 ]; then
     echo "Multiple ROOTVGs Detected."
     
-    # Extract the logical and physical partition details
-LP=$(lsvg -l rootvg | awk 'NR > 2 { print $3; exit 0; }')
-PV=$(lsvg -l rootvg | awk 'NR > 2 { print $4; exit 0; }')
+    # Extracts The Logical and Physical Partition Details Or Rootvg 
+    LP=$(lsvg -l rootvg | awk 'NR > 2 { print $3; exit 0; }')
+    PV=$(lsvg -l rootvg | awk 'NR > 2 { print $4; exit 0; }')
 
-# Find the backup disk (assuming it's the first disk not in use by rootvg)
-BACKUP_DISK=$(lspv | grep -i rootvg | awk 'NR==1 {print $1}')
-
-# Check if the physical volume is mirrored
-if (( ${PV} == 2 * ${LP} )); then
-    ROOTVG_STATUS="Mirrored"
+    # Checks If The Rootvg Is Mirrored 
+    if (( ${PV} == 2 * ${LP} )); then
+        ROOTVG_STATUS="Mirrored"
     
-    # Unmirror the volume group
-    unmirrorvg rootvg ${BACKUP_DISK}
     echo "The Volume Group Is Mirrored."
     echo "Starting System Backup To /dev/${DEVICE}..."
-    
-    # Perform the backup using mksysb
-    if ! mksysb -eiXpN /dev/${DEVICE} /dev/${BACKUP_DISK}; then
+  
+    # Create The Custom image.data File Using mkszfile
+    echo "Creating image.data Using mkszfile..."
+    mkszfile -d /image.data
+
+    # Check If mkszfile Was Successful
+    if [ $? -ne 0 ]; then
+        echo "Failed to create /image.data."
+        echo "Serial:${CURRENT_SERIAL} Exit Code:12 Date:${CURRENT_DATE} Time:${TIME}" >> "${SYSBAK_LOG}"
+        echo "Failed To Create Custom /image.data File on ${HOSTNAME}. Backup Will Not Occur." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}  
+        exit 12 
+    fi
+
+    # Get The Source Disk For The mksysb Backup To Store In The image.data File 
+    SOURCE_DISK=$(lspv | grep -i rootvg | awk '{ print $1 }' | head -n 1)
+
+    # Specifies The Path To The image.data File
+    IMAGE_DATA_FILE="/image.data"
+
+    # Checks If The image.data File Exists
+    if [ ! -f "${IMAGE_DATA_FILE}" ]; then
+        echo "${IMAGE_DATA_FILE} Not Found."
+        echo "Serial:${CURRENT_SERIAL} Exit Code:13 Date:${CURRENT_DATE} Time:${TIME}" >> "${SYSBAK_LOG}"
+        echo "/image.data File Does Not Exist On ${HOSTNAME}. Backup Will Not Occur." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}  
+        exit 13
+    fi
+
+    # Divide PPs By 2 For Any data_vg With COPIES= 2
+    echo "Dividing PPs by 2 for data_vg with COPIES=2..."
+    awk '
+    /COPIES= 2/ { 
+        copies_two = 1 
+    } 
+    /COPIES=/ && $0 !~ /COPIES= 2/ { 
+        copies_two = 0 
+    } 
+    /^[ \t]*PP=/ && copies_two { 
+        # Match PP= lines, even with leading spaces
+        split($0, arr, "=") 
+        new_value = int(arr[2] / 2)  # Divide the value of PP by 2
+        $0 = arr[1] "=" new_value   # Reconstruct the PP line with the new value
+    } 
+    { 
+        print 
+    }' "${IMAGE_DATA_FILE}" > "/temp.data" && mv "/temp.data" "${IMAGE_DATA_FILE}"
+
+    # Change COPIES=2 to COPIES=1
+    echo "Updating COPIES=2 to COPIES=1..."
+    sed 's/COPIES= 2/COPIES= 1/g' "${IMAGE_DATA_FILE}" > "/temp.data" && mv "/temp.data" "${IMAGE_DATA_FILE}"
+
+    # Update the LV_SOURCE_DISK_LIST With The New Source Disk
+    echo "Updating LV_SOURCE_DISK_LIST To ${SOURCE_DISK}..."
+    sed "s/LV_SOURCE_DISK_LIST=.*/LV_SOURCE_DISK_LIST=${SOURCE_DISK/}" "${IMAGE_DATA_FILE}" > "${IMAGE_DATA_FILE.tmp}"
+    mv "${IMAGE_DATA_FILE.tmp}" "${IMAGE_DATA_FILE}"
+
+    # Confirm The Changes To image.data 
+    echo "image.data Has Been Created And Updated Successfully."
+
+    # Perform The Backup Using mksysb
+    if ! mksysb -eXpN /dev/${DEVICE} /dev/${BACKUP_DISK}; then
         echo "Backup Failed."
         echo "Serial:${CURRENT_SERIAL} Exit Code:10 Date:${CURRENT_DATE} Time:${TIME} ROOTVG Status:${ROOTVG_STATUS}" >> "${SYSBAK_LOG}"
-        echo "Backup has failed on ${HOSTNAME}." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
+        echo "Backup Has Failed On ${HOSTNAME}." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
         exit 10
     fi
 
-   # Remirroring the disks
-   mirrorvg -S rootvg ${BACKUP_DISK}
-   
-   # Dynamically find the hdisk names for the rootvg
-    ROOTVG_HD_DISK=$(lsvg -p rootvg | awk '{print $1}' | grep -E '^hdisk[0-9]+$')
-
-   # Perform bosboot for the rootvg disks
-    for hdisk in ${ROOTVG_HD_DISK}; do
-    echo "Running bosboot for /dev/${hdisk}..."
-        if ! bosboot -ad /dev/${hdisk}; then
-            echo "Error: bosboot failed for /dev/${hdisk}"
-            echo "Serial:${CURRENT_SERIAL} Exit Code:13 Date:${CURRENT_DATE} Time:${TIME} ROOTVG Status:${ROOTVG_STATUS}" >> "${SYSBAK_LOG}"
-            echo "Failed to bosboot bootdisk for ${hdisk} on ${HOSTNAME}." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
-            exit 13
-        fi
-    done
-
-    # Perform bosboot for /dev/ipldevice
-    echo "Running bosboot for /dev/ipldevice..."
-        if ! bosboot -ad /dev/ipldevice; then
-            echo "Error: bosboot failed for /dev/ipldevice"
-            echo "Serial:${CURRENT_SERIAL} Exit Code:14 Date:${CURRENT_DATE} Time:${TIME} ROOTVG Status:${ROOTVG_STATUS}" >> "${SYSBAK_LOG}"
-            echo "Failed bosboot for /dev/ipldevice on ${HOSTNAME}." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
-            exit 14
-        fi
-
-    # Update the boot list
-    echo "Updating boot list for rootvg disks..."
-        if ! bootlist -m normal ${ROOTVG_HD_DISK}; then
-            echo "Error: Failed to update the normal boot list."
-            echo "Serial:${CURRENT_SERIAL} Exit Code:15 Date:${CURRENT_DATE} Time:${TIME} ROOTVG Status:${ROOTVG_STATUS}" >> "${SYSBAK_LOG}"
-            echo "Failed To Update Normal Bootlist on ${HOSTNAME}." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
-            exit 15
-        fi
-
-        if ! bootlist -m service cd0 rmt0 ${ROOTVG_HD_DISK}; then
-            echo "Error: Failed to update the service boot list."
-            echo "Serial:${CURRENT_SERIAL} Exit Code:16 Date:${CURRENT_DATE} Time:${TIME} ROOTVG Status:${ROOTVG_STATUS}" >> "${SYSBAK_LOG}"
-            echo "Failed To Update Service Bootlist on ${HOSTNAME}." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
-            exit 16
-        fi
-
-    # Save the base system configuration
- 
-    echo "Saving Base System Configuration..."
-        if ! savebase -v; then
-            echo "Error: Failed To Save The Base System Configuration."
-            echo "Serial:${CURRENT_SERIAL} Exit Code:17 Date:${CURRENT_DATE} Time:${TIME} ROOTVG Status:${ROOTVG_STATUS}" >> "${SYSBAK_LOG}"
-            echo "Failed savebase after bosboot on ${HOSTNAME}." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
-            exit 17
-        fi    
-
-    fi
+    rm -rf /image.data 
+    echo "Resetting image.data File For Next Update 
     
 else
     ROOTVG_STATUS="Single Disk"
@@ -286,14 +256,14 @@ else
     if ! mksysb -eiXpN /dev/${DEVICE}; then
         echo "Backup Failed."
         echo "Serial:${CURRENT_SERIAL} Exit Code:11 Date:${CURRENT_DATE} Time:${TIME} ROOTVG Status:${ROOTVG_STATUS}" >> "${SYSBAK_LOG}"
-        echo "Backup has failed on ${HOSTNAME}." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
+        echo "Backup Has Failed On ${HOSTNAME}." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
         exit 11
     fi
 fi
 
-# Success
+# Backup Was Successfully Completed
 echo "Backup Completed Successfully."
 echo "${CURRENT_SERIAL}" > "${SERIAL_FILE}"
 echo "Serial:${CURRENT_SERIAL} Exit Code:0 Date:${CURRENT_DATE} Time:${TIME} ROOTVG Status:${ROOTVG_STATUS}" >> "${SYSBAK_LOG}"
-echo "Backup was successful on ${HOSTNAME}." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
+echo "Backup Was Successful On ${HOSTNAME}." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
 exit 0
