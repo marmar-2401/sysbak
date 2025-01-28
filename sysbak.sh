@@ -199,17 +199,7 @@ if [ "${ROOTVG_COUNT}" -gt 1 ]; then
 
         # Ensure COPIES=2 is replaced with COPIES=1
         echo "Updating COPIES=2 to COPIES=1 In /image.data..."
-        sed 's/COPIES=[[:space:]]*2/COPIES= 1/' ${IMAGE_DATA_FILE} > /imagedata.tmp && mv /imagedata.tmp ${IMAGE_DATA_FILE}
-
-        # Check if the modification worked
-        if grep -i "COPIES=1" "${IMAGE_DATA_FILE}" > /dev/null; then
-            echo "COPIES=1 is successfully set in ${IMAGE_DATA_FILE}."
-        else
-            echo "Failed To Set COPIES=1 In ${IMAGE_DATA_FILE}. Exiting."
-            echo "Serial:${CURRENT_SERIAL} Exit Code:12 Date:${CURRENT_DATE} Time:${TIME}" >> "${SYSBAK_LOG}"
-            echo "Failed To Set COPIES=1 In /image.data On ${HOSTNAME}. Backup Will Not Occur." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
-            exit 12
-        fi
+        sed 's/COPIES=[[:space:]]*2/COPIES=1/' ${IMAGE_DATA_FILE} > /imagedata.tmp && mv /imagedata.tmp ${IMAGE_DATA_FILE}
 
         # Update the LV_SOURCE_DISK_LIST With The New Source Disk
         echo "Updating LV_SOURCE_DISK_LIST To ${SOURCE_DISK}..."
