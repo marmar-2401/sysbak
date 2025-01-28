@@ -199,7 +199,7 @@ if [ "${ROOTVG_COUNT}" -gt 1 ]; then
 
         # Ensure COPIES=2 is replaced with COPIES=1
         echo "Updating COPIES=2 to COPIES=1 In /image.data..."
-        sed 's/COPIES=[[:space:]]*2/COPIES=1/' ${IMAGE_DATA_FILE} > /imagedata.tmp && mv /imagedata.tmp ${IMAGE_DATA_FILE}
+        sed 's/COPIES=[[:space:]]*2/COPIES= 1/' ${IMAGE_DATA_FILE} > /imagedata.tmp && mv /imagedata.tmp ${IMAGE_DATA_FILE}
 
         # Check if the modification worked
         if grep -i "COPIES=1" "${IMAGE_DATA_FILE}" > /dev/null; then
@@ -213,7 +213,7 @@ if [ "${ROOTVG_COUNT}" -gt 1 ]; then
 
         # Update the LV_SOURCE_DISK_LIST With The New Source Disk
         echo "Updating LV_SOURCE_DISK_LIST To ${SOURCE_DISK}..."
-        sed "s/LV_SOURCE_DISK_LIST=.*/LV_SOURCE_DISK_LIST=${SOURCE_DISK}/" "${IMAGE_DATA_FILE}" > "/imagedata.tmp" && mv "/imagedata.tmp" "${IMAGE_DATA_FILE}"
+        sed "s/LV_SOURCE_DISK_LIST=.*/LV_SOURCE_DISK_LIST= ${SOURCE_DISK}/" "${IMAGE_DATA_FILE}" > "/imagedata.tmp" && mv "/imagedata.tmp" "${IMAGE_DATA_FILE}"
 
         # Process lv_data sections to halve the PP values
         echo "Processing lv_data Sections To Halve PP Values..."
