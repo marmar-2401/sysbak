@@ -71,20 +71,18 @@ How to Override the Same USB Being Used for a Backup:
 Run the following command:
 ksh sysbak.sh &
 
-sysbak.sh Exit Codes:
----------------------
-1: Sendmail is not installed.
-2: USB device removal has failed.
-3: Device discovery error.
-4: No USB devices detected.
-5: Multiple USB devices detected.
-6: Failed to detect USB serial number (Unsupported USB).
-7: USB device is under 10 GB.
-8: Serial number conflict (USB was not changed since last update).
-9: No ROOTVG detected on the server.
-10: Backup failed on a multiple ROOTVG system.
-11: Backup failed on a single ROOTVG system.
-12: Failed to create custom /image.data.
-13: Custom /image.data file could not be found.
+Exit Codes:
+1: Sendmail Is Not Installed 
+2: USB Device Removal Has Failed 
+3: Device Discovery Error 
+4: No USB Devices Detected
+5: Multiple USB Devices Detected 
+6: Failed To Detect USB Serial Number (Unsupported USB)
+7: USB Device Is Under 10 GBs
+8: Serial Number Conflict USB Was Not Changed Since Last Update 
+9: Backup Has Failed On A Multiple ROOTVG System 
+10: Backup Has Failed On A Single ROOTVG System
+11: Failed To Create Custom /image.data
+12: Custom /image.data File Could Not Be Found 
 
 
