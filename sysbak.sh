@@ -211,6 +211,10 @@ if [ "${ROOTVG_COUNT}" -gt 1 ]; then
             exit 12
         fi
 
+        # Update the LV_SOURCE_DISK_LIST With The New Source Disk
+        echo "Updating LV_SOURCE_DISK_LIST To ${SOURCE_DISK}..."
+        sed "s/LV_SOURCE_DISK_LIST=.*/LV_SOURCE_DISK_LIST=${SOURCE_DISK}/" "${IMAGE_DATA_FILE}" > "/imagedata.tmp" && mv "/imagedata.tmp" "${IMAGE_DATA_FILE}"
+
         # Process lv_data sections to halve the PP values
         echo "Processing lv_data Sections To Halve PP Values..."
         TEMP_FILE="/imagedata.tmp"
