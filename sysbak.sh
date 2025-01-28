@@ -205,31 +205,39 @@ if [ "${ROOTVG_COUNT}" -gt 1 ]; then
         echo "Updating LV_SOURCE_DISK_LIST To ${SOURCE_DISK}..."
         sed "s/LV_SOURCE_DISK_LIST=.*/LV_SOURCE_DISK_LIST= ${SOURCE_DISK}/" "${IMAGE_DATA_FILE}" > "/imagedata.tmp" && mv "/imagedata.tmp" "${IMAGE_DATA_FILE}"
 
-        # Process lv_data sections to halve the PP values
-        echo "Processing lv_data Sections To Halve PP Values..."
-        TEMP_FILE="/imagedata.tmp"
-        > "$TEMP_FILE" 
+       # Process lv_data sections to halve PP values unless COPIES=1
+echo "Processing lv_data Sections To Halve PP Values..."
+TEMP_FILE="/imagedata.tmp"
+> "$TEMP_FILE"
 
-        in_lv_data_section=0
+# Check if COPIES is not equal to 1
+COPIES_VALUE=$(grep -o 'COPIES=[[:space:]]*[0-9]*' "${IMAGE_DATA_FILE}" | awk -F '=' '{print $2}' | tr -d ' ')
 
-        while read -r line; do
-            if echo "$line" | grep -q "^lv_data"; then
-                in_lv_data_section=1
-            elif [[ -z "$line" ]]; then
-                in_lv_data_section=0
-            fi
+if [ "$COPIES_VALUE" != "1" ]; then
+    in_lv_data_section=0
 
-            if [[ $in_lv_data_section -eq 1 && $(echo "$line" | grep -c "^PP=") -gt 0 ]]; then
-                current_pps=$(echo "$line" | awk -F '=' '{print $2}' | tr -d ' ')
-                new_pps=$((current_pps / 2))
-                line=$(echo "$line" | sed "s/PP=[[:space:]]*$current_pps/PP=$new_pps/")
-            fi
+    while read -r line; do
+        if echo "$line" | grep -q "^lv_data"; then
+            in_lv_data_section=1
+        elif [[ -z "$line" ]]; then
+            in_lv_data_section=0
+        fi
 
-            echo "$line" >> "$TEMP_FILE"
-        done < "$IMAGE_DATA_FILE"
+        if [[ $in_lv_data_section -eq 1 && $(echo "$line" | grep -c "^PP=") -gt 0 ]]; then
+            current_pps=$(echo "$line" | awk -F '=' '{print $2}' | tr -d ' ')
+            new_pps=$((current_pps / 2))
+            line=$(echo "$line" | sed "s/PP=[[:space:]]*$current_pps/PP=$new_pps/")
+        fi
 
-        mv "$TEMP_FILE" "$IMAGE_DATA_FILE"
-        echo "lv_data Sections Processed. PP values Halved Where Applicable."
+        echo "$line" >> "$TEMP_FILE"
+    done < "$IMAGE_DATA_FILE"
+
+    mv "$TEMP_FILE" "$IMAGE_DATA_FILE"
+    echo "lv_data Sections Processed. PP values Halved Where Applicable."
+else
+    echo "COPIES is set to 1, skipping halving of PP values."
+fi
+
 
     
     fi
