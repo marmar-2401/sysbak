@@ -205,13 +205,13 @@ if [ "${ROOTVG_COUNT}" -gt 1 ]; then
         echo "Updating LV_SOURCE_DISK_LIST To ${SOURCE_DISK}..."
         sed "s/LV_SOURCE_DISK_LIST=.*/LV_SOURCE_DISK_LIST= ${SOURCE_DISK}/" "${IMAGE_DATA_FILE}" > "/imagedata.tmp" && mv "/imagedata.tmp" "${IMAGE_DATA_FILE}"
 
-       # Process lv_data sections to halve PP values unless COPIES=1
+    # Process lv_data sections to halve PP values unless COPIES=1
 echo "Processing lv_data Sections To Halve PP Values..."
 TEMP_FILE="/imagedata.tmp"
 > "$TEMP_FILE"
 
 # Check if COPIES is not equal to 1
-COPIES_VALUE=$(grep -o 'COPIES=[[:space:]]*[0-9]*' "${IMAGE_DATA_FILE}" | awk -F '=' '{print $2}' | tr -d ' ')
+COPIES_VALUE=$(grep 'COPIES=' "${IMAGE_DATA_FILE}" | awk -F '=' '{print $2}' | tr -d ' ')
 
 if [ "$COPIES_VALUE" != "1" ]; then
     in_lv_data_section=0
@@ -237,6 +237,7 @@ if [ "$COPIES_VALUE" != "1" ]; then
 else
     echo "COPIES is set to 1, skipping halving of PP values."
 fi
+
 
 
     
