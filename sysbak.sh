@@ -205,38 +205,43 @@ if [ "${ROOTVG_COUNT}" -gt 1 ]; then
         echo "Updating LV_SOURCE_DISK_LIST To ${SOURCE_DISK}..."
         sed "s/LV_SOURCE_DISK_LIST=.*/LV_SOURCE_DISK_LIST= ${SOURCE_DISK}/" "${IMAGE_DATA_FILE}" > "/imagedata.tmp" && mv "/imagedata.tmp" "${IMAGE_DATA_FILE}"
 
-    # Process lv_data sections to halve PP values unless COPIES=1
+ # Process lv_data sections to halve PP values (unless COPIES=1)
 echo "Processing lv_data Sections To Halve PP Values..."
 TEMP_FILE="/imagedata.tmp"
 > "$TEMP_FILE"
 
-# Check if COPIES is not equal to 1
-COPIES_VALUE=$(grep 'COPIES=' "${IMAGE_DATA_FILE}" | awk -F '=' '{print $2}' | tr -d ' ')
+# Read through the lines of /image.data
+in_lv_data_section=0
+skip_halving=false
 
-if [ "$COPIES_VALUE" != "1" ]; then
-    in_lv_data_section=0
-
-    while read -r line; do
-        if echo "$line" | grep -q "^lv_data"; then
-            in_lv_data_section=1
-        elif [[ -z "$line" ]]; then
-            in_lv_data_section=0
-        fi
-
-        if [[ $in_lv_data_section -eq 1 && $(echo "$line" | grep -c "^PP=") -gt 0 ]]; then
-            current_pps=$(echo "$line" | awk -F '=' '{print $2}' | tr -d ' ')
-            new_pps=$((current_pps / 2))
-            line=$(echo "$line" | sed "s/PP=[[:space:]]*$current_pps/PP=$new_pps/")
-        fi
-
-        echo "$line" >> "$TEMP_FILE"
-    done < "$IMAGE_DATA_FILE"
-
-    mv "$TEMP_FILE" "$IMAGE_DATA_FILE"
-    echo "lv_data Sections Processed. PP values Halved Where Applicable."
-else
-    echo "COPIES is set to 1, skipping halving of PP values."
+# Check if COPIES= 1 exists
+if grep -q "COPIES=[[:space:]]*1" "$IMAGE_DATA_FILE"; then
+    skip_halving=true
+    echo "COPIES=1 found, skipping PP halving."
 fi
+
+while read -r line; do
+    # Begin processing lv_data section
+    if echo "$line" | grep -q "^lv_data"; then
+        in_lv_data_section=1
+    elif [[ -z "$line" ]]; then
+        in_lv_data_section=0
+    fi
+
+    # Halve the PP values only if COPIES is not 1
+    if [[ $in_lv_data_section -eq 1 && $(echo "$line" | grep -c "^PP=") -gt 0 && $skip_halving == false ]]; then
+        current_pps=$(echo "$line" | awk -F '=' '{print $2}' | tr -d ' ')
+        new_pps=$((current_pps / 2))
+        line=$(echo "$line" | sed "s/PP=[[:space:]]*$current_pps/PP=$new_pps/")
+    fi
+
+    # Add the (possibly modified) line to the temporary file
+    echo "$line" >> "$TEMP_FILE"
+done < "$IMAGE_DATA_FILE"
+
+mv "$TEMP_FILE" "$IMAGE_DATA_FILE"
+echo "lv_data Sections Processed. PP values Halved Where Applicable."
+fi 
 
 
 
