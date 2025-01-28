@@ -205,62 +205,92 @@ if [ "${ROOTVG_COUNT}" -gt 1 ]; then
         echo "Updating LV_SOURCE_DISK_LIST To ${SOURCE_DISK}..."
         sed "s/LV_SOURCE_DISK_LIST=.*/LV_SOURCE_DISK_LIST= ${SOURCE_DISK}/" "${IMAGE_DATA_FILE}" > "/imagedata.tmp" && mv "/imagedata.tmp" "${IMAGE_DATA_FILE}"
 
- # Process lv_data sections to halve PP values (unless COPIES=1)
-echo "Processing lv_data Sections To Halve PP Values..."
-TEMP_FILE="/imagedata.tmp"
-> "$TEMP_FILE"
-
-# Read through the lines of /image.data
-in_lv_data_section=0
-skip_halving=false
-
-# Check if COPIES= 1 exists
-if grep -q "COPIES=[[:space:]]*1" "$IMAGE_DATA_FILE"; then
-    skip_halving=true
-    echo "COPIES=1 found, skipping PP halving."
-fi
-
-while read -r line; do
-    # Begin processing lv_data section
-    if echo "$line" | grep -q "^lv_data"; then
-        in_lv_data_section=1
-    elif [[ -z "$line" ]]; then
+ # Process lv_data sections to halve the PP values
+        echo "Processing lv_data Sections To Halve PP Values..."
+        TEMP_FILE="/imagedata.tmp"
+        > "$TEMP_FILE" 
         in_lv_data_section=0
-    fi
-
-    # Halve the PP values only if COPIES is not 1
-    if [[ $in_lv_data_section -eq 1 && $(echo "$line" | grep -c "^PP=") -gt 0 && $skip_halving == false ]]; then
-        current_pps=$(echo "$line" | awk -F '=' '{print $2}' | tr -d ' ')
-        new_pps=$((current_pps / 2))
-        line=$(echo "$line" | sed "s/PP=[[:space:]]*$current_pps/PP=$new_pps/")
-    fi
-
-    # Add the (possibly modified) line to the temporary file
-    echo "$line" >> "$TEMP_FILE"
-done < "$IMAGE_DATA_FILE"
-
-mv "$TEMP_FILE" "$IMAGE_DATA_FILE"
-echo "lv_data Sections Processed. PP values Halved Where Applicable."
-fi 
-
-
-
-    
+        while read -r line; do
+            if echo "$line" | grep -q "^lv_data"; then
+                in_lv_data_section=1
+            elif [[ -z "$line" ]]; then
+                in_lv_data_section=0
+            fi
+            if [[ $in_lv_data_section -eq 1 && $(echo "$line" | grep -c "^PP=") -gt 0 ]]; then
+                current_pps=$(echo "$line" | awk -F '=' '{print $2}' | tr -d ' ')
+                new_pps=$((current_pps / 2))
+                line=$(echo "$line" | sed "s/PP=[[:space:]]*$current_pps/PP=$new_pps/")
+            fi
+            echo "$line" >> "$TEMP_FILE"
+        done < "$IMAGE_DATA_FILE"
+        mv "$TEMP_FILE" "$IMAGE_DATA_FILE"
+        echo "lv_data Sections Processed. PP values Halved Where Applicable."
     fi
 
     echo "The Custom /image.data Was Successfully Created To Break The Mirror In The Backup"
     echo "Starting System Backup To /dev/${DEVICE}..."
+# Define the CUSTOM_MKSYSB function
+CUSTOM_MKSYSB() {
+    FLAGS=""
+    X_WPARS=""
+    
+    while getopts "VXb:eimpvaAGF:t:ZNx:TC" opt; do
+        case $opt in
+            V) FLAGS="${FLAGS} -V" ;;
+            X) FLAGS="${FLAGS} -X" ;;
+            Z) FLAGS="${FLAGS} -Z" ;;
+            b) FLAGS="${FLAGS} -b $OPTARG" ;;
+            i) FLAGS="${FLAGS} -i" ;;
+            m) FLAGS="${FLAGS} -m" ;;
+            e) FLAGS="${FLAGS} -e" ;;
+            v) FLAGS="${FLAGS} -v" ;;
+            p) FLAGS="${FLAGS} -p" ;;
+            a) FLAGS="${FLAGS} -a" ;;
+            A) FLAGS="${FLAGS} -A" ;;
+            F) FLAGS="${FLAGS} -F $OPTARG" ;;
+            t) FLAGS="${FLAGS} -t $OPTARG" ;;
+            G) X_WPARS=1; FLAGS="${FLAGS} -G" ;;
+            x) FLAGS="${FLAGS} -x $OPTARG" ;;
+            T) FLAGS="${FLAGS} -T" ;;
+            C) FLAGS="${FLAGS} -C" ;;
+        esac
+    done
 
-    # Perform The Backup Using mksysb
-    if ! mksysb -eXp /dev/${DEVICE}; then
-        echo "Backup Failed."
-        echo "Serial:${CURRENT_SERIAL} Exit Code:9 Date:${CURRENT_DATE} Time:${TIME} ROOTVG Status:${ROOTVG_STATUS}" >> "${SYSBAK_LOG}"
-        echo "Backup Has Failed On ${HOSTNAME}." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
-        exit 10
+    # Shift all arguments processed by getopts
+    shift $((OPTIND - 1))
+
+    NAME=$1
+    D_WPARS=$( /usr/sbin/lswpar -q -s D -a name 2>/dev/null )
+
+    if [ -n "$D_WPARS" ] && [ -z "$X_WPARS" ]; then
+        /usr/bin/dspmsg -s 1 sm_cmdbsys.cat 52 \
+            "ATTENTION:  This is a system WPAR that contains
+              WPARS in the Defined state.  The filesystems
+              are going to be mounted and unmounted for
+              backup purposes.  If you do not want to backup
+              these file systems, please use the command line option.
+            "
+        FLAGS="${FLAGS} -N"
     fi
+
+    # Run mksysb backup
+    /usr/bin/mksysb ${FLAGS} $NAME
+    MKSYSB_EXIT_CODE=$?  # Capture the exit code of mksysb
+
+    # Check the exit code of mksysb
+    if [ $MKSYSB_EXIT_CODE -ne 0 ]; then
+        echo "Backup Failed. Exit Code: $MKSYSB_EXIT_CODE"
+        echo "Serial:${CURRENT_SERIAL} Exit Code:$MKSYSB_EXIT_CODE Date:${CURRENT_DATE} Time:${TIME} ROOTVG Status:${ROOTVG_STATUS}" >> "${SYSBAK_LOG}"
+        echo "Backup Has Failed On ${HOSTNAME}." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
+        exit 10  # Exit the script with a custom exit code (10)
+    fi
+}
+
+
+CUSTOM_MKSYSB '-A' "/dev/${DEVICE}"
+
 else
     ROOTVG_STATUS="Single Disk"
-    mkszfile
     echo "Starting System Backup To /dev/${DEVICE}..."
     
     if ! mksysb -eXpi /dev/${DEVICE}; then
