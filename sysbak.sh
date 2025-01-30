@@ -171,65 +171,109 @@ if [ "${ROOTVG_COUNT}" -gt 1 ]; then
         ROOTVG_STATUS="Mirrored"
         echo "The Volume Group Is Mirrored"
 
-        # Create The Custom image.data File Using mkszfile
-        echo "Creating image.data Using mkszfile..."
-        mkszfile
+# Create The Custom image.data File Using mkszfile
+  echo "Creating image.data Using mkszfile..."
+  mkszfile
 
-        # Check If mkszfile Was Successful
-        if [ $? -ne 0 ]; then
-            echo "Failed to create /image.data."
-            echo "Serial:${CURRENT_SERIAL} Exit Code:11 Date:${CURRENT_DATE} Time:${TIME}" >> "${SYSBAK_LOG}"
-            echo "Failed To Create Custom /image.data File on ${HOSTNAME}. Backup Will Not Occur." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}  
-            exit 12 
-        fi
+# Check If mkszfile Was Successful
+  if [ $? -ne 0 ]; then
+      echo "Failed to create /image.data."
+      echo "Serial:${CURRENT_SERIAL} Exit Code:11 Date:${CURRENT_DATE} Time:${TIME}" >> "${SYSBAK_LOG}"
+      echo "Failed To Create Custom /image.data File on ${HOSTNAME}. Backup Will Not Occur." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}  
+      exit 12 
+  fi
 
-        # Get The Source Disk For The mksysb Backup To Store In The image.data File 
-        SOURCE_DISK=$(lspv | grep -i rootvg | awk '{ print $1 }' | head -n 1)
+# Get The Source Disk For The mksysb Backup To Store In The image.data File 
+  SOURCE_DISK=$(lspv | grep -i rootvg | awk '{ print $1 }' | head -n 1)
 
-        # Specifies The Path To The image.data File
-        IMAGE_DATA_FILE="/image.data"
+# Specifies The Path To The image.data File
+  IMAGE_DATA_FILE="/image.data"
 
-        # Checks If The image.data File Exists
-        if [ ! -f "${IMAGE_DATA_FILE}" ]; then
-            echo "${IMAGE_DATA_FILE} Not Found."
-            echo "Serial:${CURRENT_SERIAL} Exit Code:12 Date:${CURRENT_DATE} Time:${TIME}" >> "${SYSBAK_LOG}"
-            echo "Custom /image.data File Does Not Exist On ${HOSTNAME}. Backup Will Not Occur." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}  
-            exit 13
-        fi
+TMP_FILE="/imagedata.tmp"
 
-        # Ensure COPIES=2 is replaced with COPIES=1
-        echo "Updating COPIES=2 to COPIES=1 In /image.data..."
-        sed 's/COPIES=[[:space:]]*2/COPIES= 1/' ${IMAGE_DATA_FILE} > /imagedata.tmp && mv /imagedata.tmp ${IMAGE_DATA_FILE}
+echo "Updating LV_SOURCE_DISK_LIST To ${SOURCE_DISK}..."
+sed "s/LV_SOURCE_DISK_LIST=.*/LV_SOURCE_DISK_LIST= ${SOURCE_DISK}/" "${IMAGE_DATA_FILE}" > "${TMP_FILE}" && mv "${TMP_FILE}" "${IMAGE_DATA_FILE}"
 
-        # Update the LV_SOURCE_DISK_LIST With The New Source Disk
-        echo "Updating LV_SOURCE_DISK_LIST To ${SOURCE_DISK}..."
-        sed "s/LV_SOURCE_DISK_LIST=.*/LV_SOURCE_DISK_LIST= ${SOURCE_DISK}/" "${IMAGE_DATA_FILE}" > "/imagedata.tmp" && mv "/imagedata.tmp" "${IMAGE_DATA_FILE}"
 
- # Process lv_data sections to halve the PP values
-        echo "Processing lv_data Sections To Halve PP Values..."
-        TEMP_FILE="/imagedata.tmp"
-        > "$TEMP_FILE" 
-        in_lv_data_section=0
-        while read -r line; do
-            if echo "$line" | grep -q "^lv_data"; then
-                in_lv_data_section=1
-            elif [[ -z "$line" ]]; then
-                in_lv_data_section=0
-            fi
-            if [[ $in_lv_data_section -eq 1 && $(echo "$line" | grep -c "^PP=") -gt 0 ]]; then
-                current_pps=$(echo "$line" | awk -F '=' '{print $2}' | tr -d ' ')
-                new_pps=$((current_pps / 2))
-                line=$(echo "$line" | sed "s/PP=[[:space:]]*$current_pps/PP=$new_pps/")
-            fi
-            echo "$line" >> "$TEMP_FILE"
-        done < "$IMAGE_DATA_FILE"
-        mv "$TEMP_FILE" "$IMAGE_DATA_FILE"
-        echo "lv_data Sections Processed. PP values Halved Where Applicable."
+COPIESFLAG=0  # Initialize flag
+
+# Read file line by line
+while read LINE; do
+  if [ "$LINE" = "COPIES= 2" ]; then
+    COPIESFLAG=1
+    echo "COPIES= 1" >> "$TMP_FILE"
+  else
+    if [ $COPIESFLAG -eq 1 ]; then
+      PP=$(echo "$LINE" | awk '{print $1}')
+      if [ "$PP" = "PP=" ]; then
+        PPNUM=$(echo "$LINE" | awk '{print $2}')
+        PPNUMNEW=$((PPNUM / 2))
+        echo "PP= $PPNUMNEW" >> "$TMP_FILE"
+        COPIESFLAG=0
+      else
+        echo "$LINE" >> "$TMP_FILE"
+      fi
+    else
+      echo "$LINE" >> "$TMP_FILE"
     fi
+  fi
+done < /image.data
 
-    echo "The Custom /image.data Was Successfully Created To Break The Mirror In The Backup"
-    echo "Starting System Backup To /dev/${DEVICE}..."
-# Define the CUSTOM_MKSYSB function
+# Replace the original file after processing
+mv "$TMP_FILE" /image.data# Create The Custom image.data File Using mkszfile
+  echo "Creating image.data Using mkszfile..."
+  mkszfile
+
+# Check If mkszfile Was Successful
+  if [ $? -ne 0 ]; then
+      echo "Failed to create /image.data."
+      echo "Serial:${CURRENT_SERIAL} Exit Code:11 Date:${CURRENT_DATE} Time:${TIME}" >> "${SYSBAK_LOG}"
+      echo "Failed To Create Custom /image.data File on ${HOSTNAME}. Backup Will Not Occur." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}  
+      exit 12 
+  fi
+
+# Get The Source Disk For The mksysb Backup To Store In The image.data File 
+  SOURCE_DISK=$(lspv | grep -i rootvg | awk '{ print $1 }' | head -n 1)
+
+# Specifies The Path To The image.data File
+  IMAGE_DATA_FILE="/image.data"
+# Specifies The Path To the imagedata.tmp file
+  TMP_FILE="/imagedata.tmp"
+
+#Making a custom image.data file to break mirror 
+echo "Updating LV_SOURCE_DISK_LIST To ${SOURCE_DISK}..."
+sed "s/LV_SOURCE_DISK_LIST=.*/LV_SOURCE_DISK_LIST= ${SOURCE_DISK}/" "${IMAGE_DATA_FILE}" > "${TMP_FILE}" && mv "${TMP_FILE}" "${IMAGE_DATA_FILE}"
+
+COPIESFLAG=0  # Initialize flag
+
+# Read file line by line
+while read LINE; do
+  if [ "$LINE" = "COPIES= 2" ]; then
+    COPIESFLAG=1
+    echo "COPIES= 1" >> "$TMP_FILE"
+  else
+    if [ $COPIESFLAG -eq 1 ]; then
+      PP=$(echo "$LINE" | awk '{print $1}')
+      if [ "$PP" = "PP=" ]; then
+        PPNUM=$(echo "$LINE" | awk '{print $2}')
+        PPNUMNEW=$((PPNUM / 2))
+        echo "PP= $PPNUMNEW" >> "$TMP_FILE"
+        COPIESFLAG=0
+      else
+        echo "$LINE" >> "$TMP_FILE"
+      fi
+    else
+      echo "$LINE" >> "$TMP_FILE"
+    fi
+  fi
+done < /image.data
+
+# Replace the original file after processing
+mv "$TMP_FILE" /image.data
+
+echo "The Custom /image.data Was Successfully Created To Break The Mirror In The Backup"
+echo "Starting System Backup To /dev/${DEVICE}..."
+#Define the CUSTOM_MKSYSB function
 CUSTOM_MKSYSB() {
     FLAGS=""
     X_WPARS=""
