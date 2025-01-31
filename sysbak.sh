@@ -20,28 +20,30 @@ show_help() {
 ### Help Section (shown with --help) ######
 ###########################################
 Description:
-This Script Performs A System Backup To A USB Device On A AIX host.
+This Script Performs A System Backup To A USB Device On An AIX host.
 
 Usage:
   chmod +x sysbak.sh
   ./sysbak.sh
   ./sysbak.sh --help
-
+  ksh sysbak.sh
+  ksh sysbak.sh --help
+  
 Exit Codes:
-1: Sendmail Is Not Installed 
-2: USB Device Removal Has Failed 
-3: Device Discovery Error 
+1: Sendmail Is Not Installed
+2: USB Device Removal Has Failed
+3: Device Discovery Error
 4: No USB Devices Detected
-5: Multiple USB Devices Detected 
+5: Multiple USB Devices Detected
 6: Failed To Detect USB Serial Number (Unsupported USB)
 7: USB Device Is Under 10 GBs
-8: Serial Number Conflict USB Was Not Changed Since Last Update 
-9: Backup Has Failed On A Mirrored ROOTVG System 
+8: Serial Number Conflict USB Was Not Changed Since Last Update
+9: Backup Has Failed On A Mirrored ROOTVG System
 10: Backup Has Failed On A Non-Mirrored ROOTVG System
 11: Failed To Create Custom /image.data
-12: Custom /image.data File Could Not Be Found 
+12: Custom /image.data File Could Not Be Found
 
-Last Revision: 01/21/2025
+Last Revision: 01/30/2025
 Version: 1.0
 Created By: Mark Pierce-Zellefrow
 Email: markp@softcomputer.com
@@ -54,7 +56,7 @@ if [ "$1" == "--help" ]; then
     exit 0
 fi
 
-# Redirect All Output To The backup_details File 
+# Redirect All Output To The backup_details File
 exec >"${DETAILS_FILE}" 2>&1
 
 # Creates The sysbak_log File In /var/log
@@ -127,7 +129,7 @@ elif [ "${USB_COUNT}" -gt 1 ]; then
     rm -f "${USB_DETAILS}"
     exit 5
 else
-    echo "USB Discovered:${USB_LIST}"
+    echo "USB Discovered: ${USB_LIST}"
 fi
 
 # Retrieval Of USB Serial Number
@@ -150,7 +152,7 @@ if [ -z "${DEVICE_SIZE}" ] || [ "${DEVICE_SIZE}" -lt 10240 ]; then
     exit 7
 fi
 
-# Check If Serial Number Changed Ensures USB Was Changed 
+# Check If Serial Number Changed Ensures USB Was Changed
 if [ "${CURRENT_SERIAL}" = "${LAST_SERIAL}" ]; then
     echo "USB Serial Number Conflict."
     echo "Serial:${CURRENT_SERIAL} Exit Code:8 Date:${CURRENT_DATE} Time:${TIME}" >> "${SYSBAK_LOG}"
@@ -158,92 +160,90 @@ if [ "${CURRENT_SERIAL}" = "${LAST_SERIAL}" ]; then
     exit 8
 fi
 
-# Check If There Is a Single Disk Rootvg Or A Mirrored Rootvg 
+# Check If There Is a Single Disk Rootvg Or A Mirrored Rootvg
 ROOTVG_COUNT=$(lspv | grep -iw 'rootvg' | wc -l)
 
-if [ "${ROOTVG_COUNT}" -gt 1 ]; then    
-    # Extracts The Logical and Physical Partition Details Of Rootvg 
+if [ "${ROOTVG_COUNT}" -gt 1 ]; then
+    # Extracts The Logical and Physical Partition Details Of Rootvg
     LP=$(lsvg -l rootvg | awk 'NR > 2 { print $3; exit 0; }')
     PV=$(lsvg -l rootvg | awk 'NR > 2 { print $4; exit 0; }')
 
-    # Checks If The Rootvg Is Mirrored 
+    # Checks If The Rootvg Is Mirrored
     if (( ${PV} == 2 * ${LP} )); then
         ROOTVG_STATUS="Mirrored"
         echo "The Volume Group Is Mirrored"
 
-# Create The Custom image.data File Using mkszfile
-echo "Creating image.data Using mkszfile..."
-mkszfile
+        # Create The Custom image.data File Using mkszfile
+        echo "Creating image.data Using mkszfile..."
+        mkszfile
 
+        # Get The Source Disk For The mksysb Backup To Store In The image.data File
+        SOURCE_DISK=$(lspv | grep -i rootvg | awk '{ print $1 }' | head -n 1)
 
+        # Specifies The Path To The image.data File
+        IMAGE_DATA_FILE="/image.data"
+        TMP_FILE="/tmp/imagedata.tmp.$$"
 
-# Get The Source Disk For The mksysb Backup To Store In The image.data File 
-SOURCE_DISK=$(lspv | grep -i rootvg | awk '{ print $1 }' | head -n 1)
+        # Creates custom image.data file to break mirror updating LV_SOURCE_DISK_LIST, COPIES, and PP
+        awk -v disk="$SOURCE_DISK" '
+        {
+            # Update LV_SOURCE_DISK_LIST (preserve leading whitespace)
+            if ($0 ~ /^[[:space:]]*LV_SOURCE_DISK_LIST=/) {
+                match($0, /^[[:space:]]*/)
+                leading_spaces = substr($0, RSTART, RLENGTH)
+                print leading_spaces "LV_SOURCE_DISK_LIST= " disk
+            }
+            # Modify COPIES and PP (preserve leading whitespace)
+            else if ($0 ~ /^[[:space:]]*COPIES= 2$/) {
+                match($0, /^[[:space:]]*/)
+                leading_spaces = substr($0, RSTART, RLENGTH)
+                print leading_spaces "COPIES= 1"
+                COPIESFLAG = 1
+            }
+            else if (COPIESFLAG && $0 ~ /^[[:space:]]*PP= /) {
+                match($0, /^[[:space:]]*/)
+                leading_spaces = substr($0, RSTART, RLENGTH)
+                split($0, parts, "=")                # Split on "=", not "/=/"
+                pp_value = parts[2]                  # Extract value after "="
+                gsub(/ /, "", pp_value)              # Remove spaces
+                print leading_spaces "PP= " int(pp_value / 2)
+                COPIESFLAG = 0
+            }
+            else {
+                print $0
+            }
+        }' "$IMAGE_DATA_FILE" > "$TMP_FILE" && mv "$TMP_FILE" "$IMAGE_DATA_FILE"
 
-# Specifies The Path To The image.data File
-IMAGE_DATA_FILE="/image.data"
-TMP_FILE="/tmp/imagedata.tmp.$$"  
+        # Cleanup temporary file (if mv fails)
+        if [ -f "$TMP_FILE" ]; then
+            rm -f "$TMP_FILE"
+        fi
 
-# Creates custom image.data file to break mirror updating LV_SOURCE_DISK_LIST, COPIES, and PP
-awk -v disk="$SOURCE_DISK" '
-{
-    # Update LV_SOURCE_DISK_LIST (preserve leading whitespace)
-    if ($0 ~ /^[[:space:]]*LV_SOURCE_DISK_LIST=/) {
-        match($0, /^[[:space:]]*/)
-        leading_spaces = substr($0, RSTART, RLENGTH)
-        print leading_spaces "LV_SOURCE_DISK_LIST= " disk
-    }
-    # Modify COPIES and PP (preserve leading whitespace)
-    else if ($0 ~ /^[[:space:]]*COPIES= 2$/) {
-        match($0, /^[[:space:]]*/)
-        leading_spaces = substr($0, RSTART, RLENGTH)
-        print leading_spaces "COPIES= 1"
-        COPIESFLAG = 1
-    }
-    else if (COPIESFLAG && $0 ~ /^[[:space:]]*PP= /) {
-        match($0, /^[[:space:]]*/)
-        leading_spaces = substr($0, RSTART, RLENGTH)
-        split($0, parts, "=")                # Split on "=", not "/=/"
-        pp_value = parts[2]                  # Extract value after "="
-        gsub(/ /, "", pp_value)              # Remove spaces
-        print leading_spaces "PP= " int(pp_value / 2)
-        COPIESFLAG = 0
-    }
-    else {
-        print $0
-    }
-}' "$IMAGE_DATA_FILE" > "$TMP_FILE" && mv "$TMP_FILE" "$IMAGE_DATA_FILE"
+        if [ $? -ne 0 ]; then
+            echo "Failed to create custom /image.data."
+            echo "Serial:${CURRENT_SERIAL} Exit Code:11 Date:${CURRENT_DATE} Time:${TIME}" >> "${SYSBAK_LOG}"
+            echo "Failed To Create Custom /image.data File on ${HOSTNAME}. Backup Will Not Occur." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}  
+            exit 12 
+        fi
 
-# Cleanup temporary file (if mv fails)
-if [ -f "$TMP_FILE" ]; then
-    rm -f "$TMP_FILE"
-fi
+        if ! mksysb -eXp /dev/${DEVICE}; then
+            echo "Backup Failed"
+            echo "Serial:${CURRENT_SERIAL} Exit Code:9 Date:${CURRENT_DATE} Time:${TIME} ROOTVG Status:${ROOTVG_STATUS}" >> "${SYSBAK_LOG}"
+            echo "Mirrored backup Has Failed On ${HOSTNAME}." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
+            exit 11
+        fi
 
-if [ $? -ne 0 ]; then
-    echo "Failed to create custom /image.data."
-    echo "Serial:${CURRENT_SERIAL} Exit Code:11 Date:${CURRENT_DATE} Time:${TIME}" >> "${SYSBAK_LOG}"
-    echo "Failed To Create Custom /image.data File on ${HOSTNAME}. Backup Will Not Occur." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}  
-    exit 12 
-fi
-
-    if ! mksysb -eXp /dev/${DEVICE}; then
-        echo "Backup Failed"
-        echo "Serial:${CURRENT_SERIAL} Exit Code:9 Date:${CURRENT_DATE} Time:${TIME} ROOTVG Status:${ROOTVG_STATUS}" >> "${SYSBAK_LOG}"
-        echo "Mirrored backup Has Failed On ${HOSTNAME}." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
-        exit 11
-    fi
-
-else
-    ROOTVG_STATUS="Single Disk"
-    echo "Starting System Backup To /dev/${DEVICE}..."
+    else
+        ROOTVG_STATUS="Single Disk"
+        echo "Starting System Backup To /dev/${DEVICE}..."
     
-    if ! mksysb -eXpi /dev/${DEVICE}; then
-        echo "Backup Failed."
-        echo "Serial:${CURRENT_SERIAL} Exit Code:10 Date:${CURRENT_DATE} Time:${TIME} ROOTVG Status:${ROOTVG_STATUS}" >> "${SYSBAK_LOG}"
-        echo "Non-mirrored backup Has Failed On ${HOSTNAME}." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
-        exit 11
+        if ! mksysb -eXpi /dev/${DEVICE}; then
+            echo "Backup Failed."
+            echo "Serial:${CURRENT_SERIAL} Exit Code:10 Date:${CURRENT_DATE} Time:${TIME} ROOTVG Status:${ROOTVG_STATUS}" >> "${SYSBAK_LOG}"
+            echo "Non-mirrored backup Has Failed On ${HOSTNAME}." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
+            exit 11
+        fi
     fi
-fi
 
 # Backup Was Successfully Completed
 echo "Backup Completed Successfully."
