@@ -232,6 +232,7 @@ if [ "${ROOTVG_COUNT}" -gt 1 ]; then
             echo "Mirrored backup Has Failed On ${HOSTNAME}." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
             exit 11
         fi
+     fi
 
     else
         ROOTVG_STATUS="Single Disk"
