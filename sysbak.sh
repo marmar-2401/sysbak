@@ -175,7 +175,7 @@ if [ "${ROOTVG_COUNT}" -gt 1 ]; then
         echo "The Volume Group Is Mirrored"
     else
         ROOTVG_STATUS="Spanned"
-         echo "ROOTVGs Are"
+         echo "ROOTVGs Are Spanned"
          echo "Serial:${CURRENT_SERIAL} Exit Code:12 Date:${CURRENT_DATE} Time:${TIME}" >> "${SYSBAK_LOG}"
          echo "ROOTVGs Are Spanned Backup Will Not Occur ${HOSTNAME}. Backup Will Not Occur." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}  
          exit 12
