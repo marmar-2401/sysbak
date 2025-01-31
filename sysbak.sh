@@ -111,7 +111,13 @@ fi
 
 # Check For Names Of USB Devices
 USB_LIST=$(lsdev | grep -i usbms | awk '{print $1}')
-USB_COUNT=$(echo "${USB_LIST}" | wc -l)
+if [ -z "$USB_LIST" ]; then
+    USB_COUNT=0
+else
+    USB_COUNT=$(echo "$USB_LIST" | wc -l)
+fi
+
+echo "USB Count: $USB_COUNT"
 
 #Determines What To Do Dependent On The Number Of USBs In The System
 if [ "${USB_COUNT}" -eq 0 ]; then
