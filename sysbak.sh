@@ -40,7 +40,8 @@ Exit Codes:
 8: Serial Number Conflict USB Was Not Changed Since Last Update
 9: Backup Has Failed On A Mirrored ROOTVG System
 10: Backup Has Failed On A Non-Mirrored ROOTVG System
-11: Failed To Create Custom /image.data
+11: mkszfile Had An Error
+12: ROOTVGs Are Spanned 
 
 
 Last Revision: 01/30/2025
@@ -112,6 +113,7 @@ fi
 USB_LIST=$(lsdev | grep -i usbms | awk '{print $1}')
 USB_COUNT=$(echo "${USB_LIST}" | wc -l)
 
+#Determines What To Do Dependent On The Number Of USBs In The System
 if [ "${USB_COUNT}" -eq 0 ]; then
     echo "No USB Devices Detected."
     echo "Serial:None Exit Code:4 Date:${CURRENT_DATE} Time:${TIME}" >> "${SYSBAK_LOG}"
@@ -164,18 +166,31 @@ fi
 ROOTVG_COUNT=$(lspv | grep -iw 'rootvg' | wc -l)
 
 if [ "${ROOTVG_COUNT}" -gt 1 ]; then
-    # Extracts The Logical and Physical Partition Details Of Rootvg
     LP=$(lsvg -l rootvg | awk 'NR > 2 { print $3; exit 0; }')
     PV=$(lsvg -l rootvg | awk 'NR > 2 { print $4; exit 0; }')
 
-    # Checks If The Rootvg Is Mirrored
+    # Checks If The Rootvg Is Mirrored Or Spanned 
     if (( ${PV} == 2 * ${LP} )); then
         ROOTVG_STATUS="Mirrored ROOTVG"
         echo "The Volume Group Is Mirrored"
-
+    else
+        ROOTVG_STATUS="Spanned"
+         echo "ROOTVGs Are"
+         echo "Serial:${CURRENT_SERIAL} Exit Code:12 Date:${CURRENT_DATE} Time:${TIME}" >> "${SYSBAK_LOG}"
+         echo "ROOTVGs Are Spanned Backup Will Not Occur ${HOSTNAME}. Backup Will Not Occur." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}  
+         exit 12
+    fi
         # Create The Custom image.data File Using mkszfile
         echo "Creating Custom image.data File Breaking The Mirror On The System Backup Being Created..."
         mkszfile
+
+        #If mkszfile Exits With Anything Other Than Zero An Error Has Occured 
+        if [ $? -ne 0 ]; then
+            echo "mkszfile Has An Error That Occured"
+            echo "Serial:${CURRENT_SERIAL} Exit Code:11 Date:${CURRENT_DATE} Time:${TIME}" >> "${SYSBAK_LOG}"
+            echo "mkszfile Has Had An Error Occur On ${HOSTNAME}. Backup Will Not Occur." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}  
+            exit 11 
+        fi
 
         # Get The Source Disk For The mksysb Backup To Store In The image.data File
         SOURCE_DISK=$(lspv | grep -i rootvg | awk '{ print $1 }' | head -n 1)
@@ -184,7 +199,7 @@ if [ "${ROOTVG_COUNT}" -gt 1 ]; then
         IMAGE_DATA_FILE="/image.data"
         TMP_FILE="/tmp/imagedata.tmp.$$"
 
-        # Creates custom image.data file to break mirror updating LV_SOURCE_DISK_LIST, COPIES, and PP
+        # Creates Custom image.data File To Break Mirror Updating LV_SOURCE_DISK_LIST, COPIES, and PP
         awk -v disk="${SOURCE_DISK}" '
         {
             # Update LV_SOURCE_DISK_LIST (preserve leading whitespace)
@@ -214,20 +229,15 @@ if [ "${ROOTVG_COUNT}" -gt 1 ]; then
             }
         }' "${IMAGE_DATA_FILE}" > "${TMP_FILE}" && mv "${TMP_FILE}" "${IMAGE_DATA_FILE}"
 
-        # Cleanup temporary file (if mv fails)
+        # Cleans Up Temporary File (If mv Fails)
         if [ -f "${TMP_FILE}" ]; then
             rm -f "${TMP_FILE}"
         fi
-            
-        if [ $? -ne 0 ]; then
-            echo "Failed to create custom /image.data."
-            echo "Serial:${CURRENT_SERIAL} Exit Code:11 Date:${CURRENT_DATE} Time:${TIME}" >> "${SYSBAK_LOG}"
-            echo "Failed To Create Custom /image.data File on ${HOSTNAME}. Backup Will Not Occur." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}  
-            exit 11 
-        fi
+
         
         echo "The Custom image.data File Breaking The Mirror On The System Backup Was Created"
-        
+        echo "Starting System Backup To /dev/${DEVICE}..."
+    # Checks To Make Sure Mirrored ROOTVG Backup Was Successful    
         if ! mksysb -eXp /dev/${DEVICE}; then
             echo "Backup Failed"
             echo "Serial:${CURRENT_SERIAL} Exit Code:9 Date:${CURRENT_DATE} Time:${TIME} ROOTVG Status:${ROOTVG_STATUS}" >> "${SYSBAK_LOG}"
@@ -239,7 +249,7 @@ if [ "${ROOTVG_COUNT}" -gt 1 ]; then
     else
         ROOTVG_STATUS="Non-Mirrored ROOTVG"
         echo "Starting System Backup To /dev/${DEVICE}..."
-    
+    # Checks To Make Sure Non-Mirrored ROOTVG Backup Was Successful
         if ! mksysb -eXpi /dev/${DEVICE}; then
             echo "Backup Failed."
             echo "Serial:${CURRENT_SERIAL} Exit Code:10 Date:${CURRENT_DATE} Time:${TIME} ROOTVG Status:${ROOTVG_STATUS}" >> "${SYSBAK_LOG}"
