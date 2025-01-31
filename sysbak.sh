@@ -172,166 +172,61 @@ if [ "${ROOTVG_COUNT}" -gt 1 ]; then
         echo "The Volume Group Is Mirrored"
 
 # Create The Custom image.data File Using mkszfile
-  echo "Creating image.data Using mkszfile..."
-  mkszfile
+echo "Creating image.data Using mkszfile..."
+mkszfile
 
 # Check If mkszfile Was Successful
-  if [ $? -ne 0 ]; then
-      echo "Failed to create /image.data."
-      echo "Serial:${CURRENT_SERIAL} Exit Code:11 Date:${CURRENT_DATE} Time:${TIME}" >> "${SYSBAK_LOG}"
-      echo "Failed To Create Custom /image.data File on ${HOSTNAME}. Backup Will Not Occur." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}  
-      exit 12 
-  fi
+if [ $? -ne 0 ]; then
+    echo "Failed to create /image.data."
+    echo "Serial:${CURRENT_SERIAL} Exit Code:11 Date:${CURRENT_DATE} Time:${TIME}" >> "${SYSBAK_LOG}"
+    echo "Failed To Create Custom /image.data File on ${HOSTNAME}. Backup Will Not Occur." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}  
+    exit 12 
+fi
 
 # Get The Source Disk For The mksysb Backup To Store In The image.data File 
-  SOURCE_DISK=$(lspv | grep -i rootvg | awk '{ print $1 }' | head -n 1)
+SOURCE_DISK=$(lspv | grep -i rootvg | awk '{ print $1 }' | head -n 1)
 
 # Specifies The Path To The image.data File
-  IMAGE_DATA_FILE="/image.data"
-
+IMAGE_DATA_FILE="/image.data"
 TMP_FILE="/imagedata.tmp"
 
-echo "Updating LV_SOURCE_DISK_LIST To ${SOURCE_DISK}..."
-sed "s/LV_SOURCE_DISK_LIST=.*/LV_SOURCE_DISK_LIST= ${SOURCE_DISK}/" "${IMAGE_DATA_FILE}" > "${TMP_FILE}" && mv "${TMP_FILE}" "${IMAGE_DATA_FILE}"
-
-
-COPIESFLAG=0  # Initialize flag
-
-# Read file line by line
-while read LINE; do
-  if [ "$LINE" = "COPIES= 2" ]; then
-    COPIESFLAG=1
-    echo "COPIES= 1" >> "$TMP_FILE"
-  else
-    if [ $COPIESFLAG -eq 1 ]; then
-      PP=$(echo "$LINE" | awk '{print $1}')
-      if [ "$PP" = "PP=" ]; then
-        PPNUM=$(echo "$LINE" | awk '{print $2}')
-        PPNUMNEW=$((PPNUM / 2))
-        echo "PP= $PPNUMNEW" >> "$TMP_FILE"
-        COPIESFLAG=0
-      else
-        echo "$LINE" >> "$TMP_FILE"
-      fi
-    else
-      echo "$LINE" >> "$TMP_FILE"
-    fi
-  fi
-done < /image.data
-
-# Replace the original file after processing
-mv "$TMP_FILE" /image.data# Create The Custom image.data File Using mkszfile
-  echo "Creating image.data Using mkszfile..."
-  mkszfile
-
-# Check If mkszfile Was Successful
-  if [ $? -ne 0 ]; then
-      echo "Failed to create /image.data."
-      echo "Serial:${CURRENT_SERIAL} Exit Code:11 Date:${CURRENT_DATE} Time:${TIME}" >> "${SYSBAK_LOG}"
-      echo "Failed To Create Custom /image.data File on ${HOSTNAME}. Backup Will Not Occur." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}  
-      exit 12 
-  fi
-
-# Get The Source Disk For The mksysb Backup To Store In The image.data File 
-  SOURCE_DISK=$(lspv | grep -i rootvg | awk '{ print $1 }' | head -n 1)
-
-# Specifies The Path To The image.data File
-  IMAGE_DATA_FILE="/image.data"
-# Specifies The Path To the imagedata.tmp file
-  TMP_FILE="/imagedata.tmp"
-
-#Making a custom image.data file to break mirror 
-echo "Updating LV_SOURCE_DISK_LIST To ${SOURCE_DISK}..."
-sed "s/LV_SOURCE_DISK_LIST=.*/LV_SOURCE_DISK_LIST= ${SOURCE_DISK}/" "${IMAGE_DATA_FILE}" > "${TMP_FILE}" && mv "${TMP_FILE}" "${IMAGE_DATA_FILE}"
+# Preserve formatting and update LV_SOURCE_DISK_LIST
+awk -v disk="$SOURCE_DISK" '{
+    if ($1 == "LV_SOURCE_DISK_LIST=") {
+        print $1, disk;
+    } else {
+        print $0;
+    }
+}' "$IMAGE_DATA_FILE" > "$TMP_FILE"
+mv "$TMP_FILE" "$IMAGE_DATA_FILE"
 
 COPIESFLAG=0  # Initialize flag
 
-# Read file line by line
-while read LINE; do
-  if [ "$LINE" = "COPIES= 2" ]; then
-    COPIESFLAG=1
-    echo "COPIES= 1" >> "$TMP_FILE"
-  else
-    if [ $COPIESFLAG -eq 1 ]; then
-      PP=$(echo "$LINE" | awk '{print $1}')
-      if [ "$PP" = "PP=" ]; then
-        PPNUM=$(echo "$LINE" | awk '{print $2}')
-        PPNUMNEW=$((PPNUM / 2))
-        echo "PP= $PPNUMNEW" >> "$TMP_FILE"
-        COPIESFLAG=0
-      else
-        echo "$LINE" >> "$TMP_FILE"
-      fi
-    else
-      echo "$LINE" >> "$TMP_FILE"
-    fi
-  fi
-done < /image.data
+# Preserve indentation while modifying COPIES and PP values
+awk '{
+    if ($1 == "COPIES=" && $2 == "2") {
+        print $1, "1";
+        COPIESFLAG=1;
+    } else if (COPIESFLAG && $1 == "PP=") {
+        print $1, int($2 / 2);
+        COPIESFLAG=0;
+    } else {
+        print $0;
+    }
+}' "$IMAGE_DATA_FILE" > "$TMP_FILE"
 
 # Replace the original file after processing
-mv "$TMP_FILE" /image.data
+mv "$TMP_FILE" "$IMAGE_DATA_FILE"
 
 echo "The Custom /image.data Was Successfully Created To Break The Mirror In The Backup"
 echo "Starting System Backup To /dev/${DEVICE}..."
-#Define the CUSTOM_MKSYSB function
-CUSTOM_MKSYSB() {
-    FLAGS=""
-    X_WPARS=""
-    
-    while getopts "VXb:eimpvaAGF:t:ZNx:TC" opt; do
-        case $opt in
-            V) FLAGS="${FLAGS} -V" ;;
-            X) FLAGS="${FLAGS} -X" ;;
-            Z) FLAGS="${FLAGS} -Z" ;;
-            b) FLAGS="${FLAGS} -b $OPTARG" ;;
-            i) FLAGS="${FLAGS} -i" ;;
-            m) FLAGS="${FLAGS} -m" ;;
-            e) FLAGS="${FLAGS} -e" ;;
-            v) FLAGS="${FLAGS} -v" ;;
-            p) FLAGS="${FLAGS} -p" ;;
-            a) FLAGS="${FLAGS} -a" ;;
-            A) FLAGS="${FLAGS} -A" ;;
-            F) FLAGS="${FLAGS} -F $OPTARG" ;;
-            t) FLAGS="${FLAGS} -t $OPTARG" ;;
-            G) X_WPARS=1; FLAGS="${FLAGS} -G" ;;
-            x) FLAGS="${FLAGS} -x $OPTARG" ;;
-            T) FLAGS="${FLAGS} -T" ;;
-            C) FLAGS="${FLAGS} -C" ;;
-        esac
-    done
 
-    # Shift all arguments processed by getopts
-    shift $((OPTIND - 1))
-
-    NAME=$1
-    D_WPARS=$( /usr/sbin/lswpar -q -s D -a name 2>/dev/null )
-
-    if [ -n "$D_WPARS" ] && [ -z "$X_WPARS" ]; then
-        /usr/bin/dspmsg -s 1 sm_cmdbsys.cat 52 \
-            "ATTENTION:  This is a system WPAR that contains
-              WPARS in the Defined state.  The filesystems
-              are going to be mounted and unmounted for
-              backup purposes.  If you do not want to backup
-              these file systems, please use the command line option.
-            "
-        FLAGS="${FLAGS} -N"
-    fi
-
-    # Run mksysb backup
-    /usr/bin/mksysb ${FLAGS} $NAME
-    MKSYSB_EXIT_CODE=$?  # Capture the exit code of mksysb
-
-    # Check the exit code of mksysb
     if [ $MKSYSB_EXIT_CODE -ne 0 ]; then
         echo "Backup Failed. Exit Code: $MKSYSB_EXIT_CODE"
         echo "Serial:${CURRENT_SERIAL} Exit Code:$MKSYSB_EXIT_CODE Date:${CURRENT_DATE} Time:${TIME} ROOTVG Status:${ROOTVG_STATUS}" >> "${SYSBAK_LOG}"
         echo "Backup Has Failed On ${HOSTNAME}." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
         exit 10  # Exit the script with a custom exit code (10)
     fi
-}
-
-
-CUSTOM_MKSYSB '-A' "/dev/${DEVICE}"
 
 else
     ROOTVG_STATUS="Single Disk"
