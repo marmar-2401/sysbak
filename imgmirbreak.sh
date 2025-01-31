@@ -1,3 +1,5 @@
+#!/bin/ksh
+
 # Create The Custom image.data File Using mkszfile
 echo "Creating image.data Using mkszfile..."
 mkszfile
