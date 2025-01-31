@@ -41,7 +41,7 @@ Exit Codes:
 9: Backup Has Failed On A Mirrored ROOTVG System
 10: Backup Has Failed On A Non-Mirrored ROOTVG System
 11: Failed To Create Custom /image.data
-12: Custom /image.data File Could Not Be Found
+
 
 Last Revision: 01/30/2025
 Version: 1.0
@@ -170,11 +170,11 @@ if [ "${ROOTVG_COUNT}" -gt 1 ]; then
 
     # Checks If The Rootvg Is Mirrored
     if (( ${PV} == 2 * ${LP} )); then
-        ROOTVG_STATUS="Mirrored"
+        ROOTVG_STATUS="Mirrored ROOTVG"
         echo "The Volume Group Is Mirrored"
 
         # Create The Custom image.data File Using mkszfile
-        echo "Creating image.data Using mkszfile..."
+        echo "Creating Custom image.data File Breaking The Mirror On The System Backup Being Created..."
         mkszfile
 
         # Get The Source Disk For The mksysb Backup To Store In The image.data File
@@ -185,7 +185,7 @@ if [ "${ROOTVG_COUNT}" -gt 1 ]; then
         TMP_FILE="/tmp/imagedata.tmp.$$"
 
         # Creates custom image.data file to break mirror updating LV_SOURCE_DISK_LIST, COPIES, and PP
-        awk -v disk="$SOURCE_DISK" '
+        awk -v disk="${SOURCE_DISK}" '
         {
             # Update LV_SOURCE_DISK_LIST (preserve leading whitespace)
             if ($0 ~ /^[[:space:]]*LV_SOURCE_DISK_LIST=/) {
@@ -212,37 +212,39 @@ if [ "${ROOTVG_COUNT}" -gt 1 ]; then
             else {
                 print $0
             }
-        }' "$IMAGE_DATA_FILE" > "$TMP_FILE" && mv "$TMP_FILE" "$IMAGE_DATA_FILE"
+        }' "${IMAGE_DATA_FILE}" > "${TMP_FILE}" && mv "${TMP_FILE}" "${IMAGE_DATA_FILE}"
 
         # Cleanup temporary file (if mv fails)
-        if [ -f "$TMP_FILE" ]; then
-            rm -f "$TMP_FILE"
+        if [ -f "${TMP_FILE}" ]; then
+            rm -f "${TMP_FILE}"
         fi
-
+            
         if [ $? -ne 0 ]; then
             echo "Failed to create custom /image.data."
             echo "Serial:${CURRENT_SERIAL} Exit Code:11 Date:${CURRENT_DATE} Time:${TIME}" >> "${SYSBAK_LOG}"
             echo "Failed To Create Custom /image.data File on ${HOSTNAME}. Backup Will Not Occur." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}  
-            exit 12 
+            exit 11 
         fi
-
+        
+        echo "The Custom image.data File Breaking The Mirror On The System Backup Was Created"
+        
         if ! mksysb -eXp /dev/${DEVICE}; then
             echo "Backup Failed"
             echo "Serial:${CURRENT_SERIAL} Exit Code:9 Date:${CURRENT_DATE} Time:${TIME} ROOTVG Status:${ROOTVG_STATUS}" >> "${SYSBAK_LOG}"
             echo "Mirrored backup Has Failed On ${HOSTNAME}." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
-            exit 11
+            exit 9
         fi
      fi
 
     else
-        ROOTVG_STATUS="Single Disk"
+        ROOTVG_STATUS="Non-Mirrored ROOTVG"
         echo "Starting System Backup To /dev/${DEVICE}..."
     
         if ! mksysb -eXpi /dev/${DEVICE}; then
             echo "Backup Failed."
             echo "Serial:${CURRENT_SERIAL} Exit Code:10 Date:${CURRENT_DATE} Time:${TIME} ROOTVG Status:${ROOTVG_STATUS}" >> "${SYSBAK_LOG}"
             echo "Non-mirrored backup Has Failed On ${HOSTNAME}." | mail -s "${HOSTNAME} Backup Report" ${CLIENT_RECIPIENT}
-            exit 11
+            exit 10
         fi
     fi
 
