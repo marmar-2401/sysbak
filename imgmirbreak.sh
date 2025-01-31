@@ -17,32 +17,39 @@ SOURCE_DISK=$(lspv | grep -i rootvg | awk '{ print $1 }' | head -n 1)
 
 # Specifies The Path To The image.data File
 IMAGE_DATA_FILE="/image.data"
-TMP_FILE="/imagedata.tmp"
+TMP_FILE="/tmp/imagedata.tmp.$$"  # Use /tmp to avoid permission issues
 
-# Preserve formatting and update LV_SOURCE_DISK_LIST
-awk -v disk="$SOURCE_DISK" '{
-    if ($1 == "LV_SOURCE_DISK_LIST=") {
-        print $1, disk;
-    } else {
-        print $0;
+# Use awk to preserve indentation while updating LV_SOURCE_DISK_LIST, COPIES, and PP
+awk -v disk="$SOURCE_DISK" '
+{
+    # Update LV_SOURCE_DISK_LIST (preserve leading whitespace)
+    if ($0 ~ /^[[:space:]]*LV_SOURCE_DISK_LIST=/) {
+        match($0, /^[[:space:]]*/)
+        leading_spaces = substr($0, RSTART, RLENGTH)
+        print leading_spaces "LV_SOURCE_DISK_LIST= " disk
     }
-}' "$IMAGE_DATA_FILE" > "$TMP_FILE"
-mv "$TMP_FILE" "$IMAGE_DATA_FILE"
-
-COPIESFLAG=0  # Initialize flag
-
-# Preserve indentation while modifying COPIES and PP values
-awk '{
-    if ($1 == "COPIES=" && $2 == "2") {
-        print $1, "1";
-        COPIESFLAG=1;
-    } else if (COPIESFLAG && $1 == "PP=") {
-        print $1, int($2 / 2);
-        COPIESFLAG=0;
-    } else {
-        print $0;
+    # Modify COPIES and PP (preserve leading whitespace)
+    else if ($0 ~ /^[[:space:]]*COPIES= 2$/) {
+        match($0, /^[[:space:]]*/)
+        leading_spaces = substr($0, RSTART, RLENGTH)
+        print leading_spaces "COPIES= 1"
+        COPIESFLAG = 1
     }
-}' "$IMAGE_DATA_FILE" > "$TMP_FILE"
+    else if (COPIESFLAG && $0 ~ /^[[:space:]]*PP= /) {
+        match($0, /^[[:space:]]*/)
+        leading_spaces = substr($0, RSTART, RLENGTH)
+        split($0, parts, "=")                # Split on "=", not "/=/"
+        pp_value = parts[2]                  # Extract value after "="
+        gsub(/ /, "", pp_value)              # Remove spaces
+        print leading_spaces "PP= " int(pp_value / 2)
+        COPIESFLAG = 0
+    }
+    else {
+        print $0
+    }
+}' "$IMAGE_DATA_FILE" > "$TMP_FILE" && mv "$TMP_FILE" "$IMAGE_DATA_FILE"
 
-# Replace the original file after processing
-mv "$TMP_FILE" "$IMAGE_DATA_FILE"
+# Cleanup temporary file (if mv fails)
+if [ -f "$TMP_FILE" ]; then
+    rm -f "$TMP_FILE"
+fi
