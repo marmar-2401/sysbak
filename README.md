@@ -89,9 +89,9 @@ Commands To Check If A /image.data Mirror Is Broken (Important For Backing Up A 
 - cat /image.data | grep 'LV_SOURCE_DISK_LIST='
 - cat /image.data | grep 'PP='
 
-===========================================
-          Restoring from MKSYSB  
-===========================================
+
+Restoring from MKSYSB  
+------------------------
 
 --- 1. Access the HMC ---
 - Log in to the **HMC**.
