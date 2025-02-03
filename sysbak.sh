@@ -47,7 +47,7 @@ Exit Codes:
 Last Revision: 01/30/2025
 Version: 1.0
 Created By: Mark Pierce-Zellefrow
-Email: markp@softcomputer.com
+
 EOF
 }
 
