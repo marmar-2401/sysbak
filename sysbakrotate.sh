@@ -34,7 +34,7 @@ To Run The Script Manually:
 Last Revision: 01/22/2025
 Version: 1.0
 Created By: Mark Pierce-Zellefrow
-Email: markp@softcomputer.com
+
 
 EOF
 }
