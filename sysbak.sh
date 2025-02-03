@@ -1,9 +1,9 @@
 #!/bin/ksh
 
 # Variables and Files
-DETAILS_FILE="backup_details"
-SERIAL_FILE="usb_serial"
-USB_DETAILS="usb_details"
+DETAILS_FILE="/sysbak/backup_details"
+SERIAL_FILE="/sysbak/usb_serial"
+USB_DETAILS="/sysbak/usb_details"
 SYSBAK_LOG="/var/log/sysbak_log"
 CLIENT_RECIPIENT="markp@softcomputer.com"
 HOSTNAME=$(uname -n)
